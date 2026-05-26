@@ -20,8 +20,6 @@ export type Recording = {
   durationSec: number;
   /** 영역별 마킹 개수 요약 */
   summary: RecordingSummary;
-  /** 아바타 색상 톤 */
-  avatarAccent: Area;
 };
 
 const TWINKLE = { songId: 'twinkle', songTitle: '반짝 반짝 작은별' };
@@ -35,7 +33,6 @@ export const OTHER_RECORDINGS: Recording[] = [
     date: '2일 전',
     durationSec: 72,
     summary: { pitch: 2, rhythm: 1, posture: 0 },
-    avatarAccent: 'pitch',
   },
   {
     id: 'rec-doyun',
@@ -45,7 +42,6 @@ export const OTHER_RECORDINGS: Recording[] = [
     date: '5일 전',
     durationSec: 74,
     summary: { pitch: 1, rhythm: 3, posture: 1 },
-    avatarAccent: 'rhythm',
   },
   {
     id: 'rec-jiwoo',
@@ -55,7 +51,6 @@ export const OTHER_RECORDINGS: Recording[] = [
     date: '1주 전',
     durationSec: 71,
     summary: { pitch: 0, rhythm: 1, posture: 3 },
-    avatarAccent: 'posture',
   },
 ];
 
@@ -68,7 +63,6 @@ export const MY_RECORDINGS: Recording[] = [
     date: '오늘',
     durationSec: 73,
     summary: { pitch: 2, rhythm: 2, posture: 1 },
-    avatarAccent: 'pitch',
   },
   {
     id: 'rec-me-2',
@@ -78,7 +72,6 @@ export const MY_RECORDINGS: Recording[] = [
     date: '3일 전',
     durationSec: 70,
     summary: { pitch: 3, rhythm: 1, posture: 2 },
-    avatarAccent: 'rhythm',
   },
 ];
 

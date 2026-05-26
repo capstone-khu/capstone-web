@@ -1,5 +1,5 @@
 import { PITCH_Y, type Bar as BarType } from '@/data/song';
-import { markClass, type Area, type Mark } from '@/data/session';
+import { markBorderClass, markClass, type Area, type Mark } from '@/data/session';
 
 type Props = {
   barIndex: number;
@@ -9,6 +9,7 @@ type Props = {
   previousMarks: Mark[];
   currentMarks: Mark[];
   lyrics?: string[]; // 마디당 음절 4개 (가사 표시 시)
+  staffClassName?: string; // 악보 SVG 높이 — 거터 정렬이 필요한 그리드에선 'h-16' 고정
 };
 
 const noteX = (i: number) => 16 + i * 24;
@@ -20,6 +21,7 @@ export function BarView({
   previousMarks,
   currentMarks,
   lyrics,
+  staffClassName = 'h-auto',
 }: Props) {
   const playheadX = 8 + progress * 100;
 
@@ -30,7 +32,11 @@ export function BarView({
           isCurrent ? 'border-foreground' : 'border-border'
         }`}
       >
-        <svg viewBox="0 0 116 60" className="block h-auto w-full">
+        <svg
+          viewBox="0 0 116 60"
+          preserveAspectRatio="xMidYMid meet"
+          className={`block w-full ${staffClassName}`}
+        >
           {[15, 22, 29, 36, 43].map((y) => (
             <line
               key={y}
@@ -115,6 +121,13 @@ export function BarView({
   );
 }
 
+const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
+const AREA_DOT: Record<Area, string> = {
+  pitch: 'bg-pitch',
+  rhythm: 'bg-rhythm',
+  posture: 'bg-posture',
+};
+
 function MarkRow({
   area,
   previous,
@@ -126,11 +139,51 @@ function MarkRow({
 }) {
   const curr = current.find((m) => m.area === area);
   const prev = previous.find((m) => m.area === area);
-  if (curr) {
-    return <div className={`h-1.5 rounded-sm ${markClass(area, curr.severity, 'current')}`} />;
+  // 이번=꽉 참(색칠) / 이전=외곽선(테두리) / 없음(GOOD)=옅은 회색 트랙. '형태'로 시간을 구분.
+  // 같은 영역에 둘 다 있으면 현재 색칠 위에 과거 테두리를 덧입혀 둘 다 보이게 한다.
+  let barClass: string;
+  if (curr && prev) {
+    barClass = `${markClass(area, 'current')} ${markBorderClass(area)}`;
+  } else if (curr) {
+    barClass = markClass(area, 'current');
+  } else if (prev) {
+    barClass = markClass(area, 'previous');
+  } else {
+    barClass = 'bg-gray-100';
   }
-  if (prev) {
-    return <div className={`h-1.5 rounded-sm ${markClass(area, prev.severity, 'previous')}`} />;
-  }
-  return <div className="h-1.5 rounded-sm bg-transparent" />;
+  return (
+    <div className="flex h-4 items-center">
+      <div className={`h-2.5 w-full rounded-sm ${barClass}`} />
+    </div>
+  );
+}
+
+/**
+ * 악보 줄 왼쪽 거터 — 마킹 3레인(음정/박자/자세)에 이름표를 한 번씩 붙인다.
+ * BarView와 동일한 세로 리듬(space-y-1 + 악보 자리 + h-4 레인)을 그대로 복제해
+ * 별도 좌표 계산 없이 각 레인과 라벨이 줄을 맞춘다.
+ */
+export function LaneGutter({
+  staffSpacerClassName = 'h-16',
+  className = '',
+}: {
+  staffSpacerClassName?: string;
+  className?: string;
+}) {
+  return (
+    <div className={`shrink-0 space-y-1 ${className}`}>
+      {/* 악보 박스와 동일한 테두리 박스 모델로 높이를 맞춘 빈 자리 */}
+      <div className="rounded-md border border-transparent">
+        <div className={`w-full ${staffSpacerClassName}`} />
+      </div>
+      {(['pitch', 'rhythm', 'posture'] as Area[]).map((area) => (
+        <div key={area} className="flex h-4 items-center gap-1.5">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${AREA_DOT[area]}`} />
+          <span className="text-[11px] font-semibold leading-none text-muted-foreground">
+            {AREA_KO[area]}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }

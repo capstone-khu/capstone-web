@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { CloseIcon } from '@/components/icons';
 
 type Props = {
   open: boolean;
@@ -35,14 +36,22 @@ export function BottomSheet({ open, onClose, title, description, children }: Pro
       aria-modal="true"
     >
       <div
-        className="animate-sheet-up max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card shadow-modal sm:rounded-3xl"
+        className="animate-sheet-up relative max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card shadow-modal sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-gray-100"
+        >
+          <CloseIcon className="h-5 w-5" />
+        </button>
         <div className="flex justify-center pt-3 sm:hidden">
           <span className="h-1.5 w-10 rounded-full bg-gray-200" />
         </div>
         {(title || description) && (
-          <div className="space-y-1 px-6 pb-1 pt-4">
+          <div className="space-y-1 px-6 pb-1 pt-4 pr-14">
             {title && <h2 className="text-lg font-bold">{title}</h2>}
             {description && <p className="text-sm text-muted-foreground">{description}</p>}
           </div>

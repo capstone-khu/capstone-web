@@ -106,11 +106,16 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(16px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        'dot-bounce': {
+          '0%, 80%, 100%': { transform: 'scale(0.6)', opacity: '0.35' },
+          '40%': { transform: 'scale(1)', opacity: '1' },
+        },
       },
       animation: {
         press: 'press 180ms ease-in-out',
         'feedback-in': 'feedback-in 280ms cubic-bezier(0.4, 0, 0.2, 1)',
         'sheet-up': 'sheet-up 240ms cubic-bezier(0.4, 0, 0.2, 1)',
+        'dot-bounce': 'dot-bounce 1.2s ease-in-out infinite',
       },
     },
   },

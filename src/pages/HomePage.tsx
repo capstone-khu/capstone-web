@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { BottomSheet } from '@/components/ui/sheet';
 import { AppHeader } from '@/components/AppHeader';
 import { SONG_LIST, type SongMeta } from '@/data/song';
-import { UserIcon } from '@/components/icons';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 
@@ -32,17 +31,14 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <AppHeader
-        title="캡스톤 디자인"
+        title="CAPSTONE DESIGN"
         right={
           <button
             type="button"
             onClick={() => navigate('/mypage')}
-            className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-gray-50"
+            className="rounded-full px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-gray-50"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background">
-              <UserIcon className="h-4 w-4" />
-            </span>
-            <span className="text-sm font-semibold">{user?.name ?? '게스트'} 님</span>
+            {user?.name ?? '게스트'} 님, 반가워요
           </button>
         }
       />
@@ -52,7 +48,7 @@ export default function HomePage() {
           <header className="space-y-3 text-center">
             <h1 className="text-3xl font-bold tracking-tight">어떤 곡을 연주할까요?</h1>
             <p className="text-sm text-muted-foreground">
-              곡을 선택하면 카메라·마이크 권한을 확인한 뒤 시작합니다
+              곡을 선택하면 카메라·마이크 권한을 확인한 뒤 연주를 시작할 수 있어요.
             </p>
           </header>
 

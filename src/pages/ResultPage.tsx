@@ -4,26 +4,28 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { AppHeader } from '@/components/AppHeader';
-import { BarView } from '@/components/sheet/BarView';
+import { ChevronLeftIcon } from '@/components/icons';
+import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { LYRICS, SONG } from '@/data/song';
 import {
   ANALYSIS_WINDOW_BARS,
-  FEEDBACK_SEQUENCE,
   currentMarksUpToWindow,
   marksFromSummary,
   previousMarksByBar,
   type Area,
-  type Feedback,
   type Mark,
-  type Severity,
 } from '@/data/session';
 import { getRecording } from '@/data/recordings';
 import { usePlaySession } from '@/store/usePlaySession';
 
 const TOTAL_WINDOWS = Math.ceil(SONG.bars.length / ANALYSIS_WINDOW_BARS);
 
+const BARS_PER_ROW = 6;
+const ROWS_PER_PAGE = 2; // 두 줄 = 한 페이지
+const TOTAL_ROWS = Math.ceil(SONG.bars.length / BARS_PER_ROW);
+const RESULT_PAGES = Math.ceil(TOTAL_ROWS / ROWS_PER_PAGE);
+
 const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const SEVERITY_KO: Record<Severity, string> = { mild: '살짝', major: '심각' };
 const AREA_DOT: Record<Area, string> = {
   pitch: 'bg-pitch',
   rhythm: 'bg-rhythm',
@@ -42,6 +44,7 @@ export default function ResultPage() {
   const recordingId = usePlaySession((s) => s.recordingId);
   const replay = usePlaySession((s) => s.replay);
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
 
   // 마이페이지 이력에서 진입하면 state.recordingId가 실린다 → '과거 기록' 열람 모드.
   // 연주 직후(/play)에서 오면 state가 없다 → '방금 끝난 연주' 모드.
@@ -93,41 +96,50 @@ export default function ResultPage() {
       <main className="container max-w-5xl space-y-6 py-6">
         <Card>
           <CardHeader>
-            <CardTitle>{isHistory ? '연주 마킹' : '이번 연주 누적 마킹'}</CardTitle>
+            <CardTitle>{isHistory ? '잘못 연주한 부분을 개선해보세요!' : '이번 연주 누적 마킹'}</CardTitle>
             <CardDescription>
               {isHistory
-                ? '이 연주에서 마킹된 부분입니다. 마디를 클릭하면 어떤 부분이 문제였는지 자세히 볼 수 있습니다.'
+                ? '이 연주에서 피드백 받은 부분입니다. 마디를 클릭하면 어떤 부분이 문제였는지 자세히 볼 수 있습니다.'
                 : '이번 연주는 보관함에 자동 저장되었습니다. 마디를 클릭하면 어떤 부분이 문제였는지 자세히 볼 수 있습니다.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Legend />
             <div className="space-y-4">
-              {[0, 1, 2, 3].map((row) => (
-                <div key={row} className="grid grid-cols-6 gap-2">
-                  {SONG.bars.slice(row * 6, (row + 1) * 6).map((bar, i) => {
-                    const barIndex = row * 6 + i;
-                    return (
-                      <button
-                        key={barIndex}
-                        type="button"
-                        onClick={() => setSelectedBar(barIndex)}
-                        className="block w-full rounded-md p-1 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`마디 ${barIndex + 1} 자세히 보기`}
-                      >
-                        <BarView
-                          barIndex={barIndex}
-                          notes={bar}
-                          previousMarks={previousMarks.get(barIndex) ?? []}
-                          currentMarks={currentMarks.get(barIndex) ?? []}
-                          lyrics={LYRICS[barIndex]}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+              {Array.from({ length: ROWS_PER_PAGE }).map((_, r) => {
+                const row = page * ROWS_PER_PAGE + r;
+                if (row >= TOTAL_ROWS) return null;
+                return (
+                  <div key={row} className="flex items-start gap-2">
+                    <LaneGutter staffSpacerClassName="h-16" className="pt-1" />
+                    <div className="grid min-w-0 flex-1 grid-cols-6 gap-2">
+                      {SONG.bars.slice(row * BARS_PER_ROW, (row + 1) * BARS_PER_ROW).map((bar, i) => {
+                        const barIndex = row * BARS_PER_ROW + i;
+                        return (
+                          <button
+                            key={barIndex}
+                            type="button"
+                            onClick={() => setSelectedBar(barIndex)}
+                            className="block w-full rounded-md p-1 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label={`마디 ${barIndex + 1} 자세히 보기`}
+                          >
+                            <BarView
+                              barIndex={barIndex}
+                              notes={bar}
+                              previousMarks={previousMarks.get(barIndex) ?? []}
+                              currentMarks={currentMarks.get(barIndex) ?? []}
+                              lyrics={LYRICS[barIndex]}
+                              staffClassName="h-16"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            <PageNav page={page} total={RESULT_PAGES} onChange={setPage} />
           </CardContent>
         </Card>
 
@@ -151,7 +163,6 @@ export default function ResultPage() {
             barIndex={selectedBar}
             currentBarMarks={currentMarks.get(selectedBar) ?? []}
             previousBarMarks={previousMarks.get(selectedBar) ?? []}
-            feedback={isHistory ? null : (FEEDBACK_SEQUENCE[Math.floor(selectedBar / ANALYSIS_WINDOW_BARS)] ?? null)}
           />
         )}
       </Modal>
@@ -161,20 +172,69 @@ export default function ResultPage() {
 
 /* ──────────────────────────────────────────────────────────────── */
 
+function PageNav({
+  page,
+  total,
+  onChange,
+}: {
+  page: number;
+  total: number;
+  onChange: (p: number) => void;
+}) {
+  if (total <= 1) return null;
+  return (
+    <div className="flex items-center justify-center gap-4">
+      <Button
+        size="sm"
+        variant="ghost"
+        className="gap-1"
+        onClick={() => onChange(page - 1)}
+        disabled={page === 0}
+      >
+        <ChevronLeftIcon className="h-4 w-4" />
+        이전
+      </Button>
+      <div className="flex items-center gap-1.5">
+        {Array.from({ length: total }).map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChange(i)}
+            aria-label={`${i + 1}페이지`}
+            className={`h-2 w-2 rounded-full transition-colors ${
+              i === page ? 'bg-foreground' : 'bg-gray-200 hover:bg-gray-300'
+            }`}
+          />
+        ))}
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="gap-1"
+        onClick={() => onChange(page + 1)}
+        disabled={page === total - 1}
+      >
+        다음
+        <ChevronLeftIcon className="h-4 w-4 rotate-180" />
+      </Button>
+    </div>
+  );
+}
+
 function Legend() {
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5">
-        <span className="inline-block h-2 w-3 rounded-sm bg-pitch/30" />
-        <span className="inline-block h-2 w-3 rounded-sm bg-rhythm/30" />
-        <span className="inline-block h-2 w-3 rounded-sm bg-posture/30" />
-        <span>이전 세션 (가이드)</span>
+        <span className="inline-block h-2.5 w-3.5 rounded-sm border-2 border-pitch bg-background" />
+        <span className="inline-block h-2.5 w-3.5 rounded-sm border-2 border-rhythm bg-background" />
+        <span className="inline-block h-2.5 w-3.5 rounded-sm border-2 border-posture bg-background" />
+        <span>이전 세션 (외곽선)</span>
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="inline-block h-2 w-3 rounded-sm bg-pitch" />
-        <span className="inline-block h-2 w-3 rounded-sm bg-rhythm" />
-        <span className="inline-block h-2 w-3 rounded-sm bg-posture" />
-        <span>이번 세션</span>
+        <span className="inline-block h-2.5 w-3.5 rounded-sm bg-pitch" />
+        <span className="inline-block h-2.5 w-3.5 rounded-sm bg-rhythm" />
+        <span className="inline-block h-2.5 w-3.5 rounded-sm bg-posture" />
+        <span>이번 세션 (채움)</span>
       </span>
     </div>
   );
@@ -187,13 +247,10 @@ function BarDetail({
   barIndex,
   currentBarMarks,
   previousBarMarks,
-  feedback,
 }: {
   barIndex: number;
   currentBarMarks: Mark[];
   previousBarMarks: Mark[];
-  /** 라이브 세션 결과에서만 피드백 문구를 함께 보여준다. 과거 기록은 null. */
-  feedback: Feedback | null;
 }) {
   const notes = SONG.bars[barIndex];
 
@@ -230,23 +287,6 @@ function BarDetail({
             ))}
           </ul>
         )}
-
-        {feedback && feedback.tone === 'normal' && (
-          <FeedbackQuote label={`[${feedback.label}]`} message={feedback.message} />
-        )}
-        {feedback && feedback.tone === 'switch' && (
-          <div className="rounded-xl bg-posture/10 px-4 py-3">
-            <p className="text-xs font-bold text-posture">[{feedback.label}]</p>
-            <p className="mt-0.5 text-sm font-semibold">{feedback.message}</p>
-            <p className="mt-1 text-xs text-muted-foreground">영역 전환 가이드</p>
-          </div>
-        )}
-        {feedback && feedback.tone === 'positive' && (
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <p className="text-sm font-semibold">{feedback.message}</p>
-            <p className="mt-1 text-xs text-muted-foreground">칭찬</p>
-          </div>
-        )}
       </section>
 
       {/* 이전 세션 */}
@@ -269,25 +309,14 @@ function BarDetail({
 }
 
 function MarkChip({ mark, layer = 'current' }: { mark: Mark; layer?: 'previous' | 'current' }) {
-  const opacity = layer === 'previous' ? 'opacity-50' : '';
+  const dim = layer === 'previous' ? 'opacity-60' : '';
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border px-3 py-2">
-      <div className="flex items-center gap-2.5">
-        <span className={`h-2.5 w-2.5 rounded-full ${AREA_DOT[mark.area]} ${opacity}`} />
-        <span className={`text-sm font-bold ${AREA_TEXT[mark.area]} ${opacity}`}>
-          {AREA_KO[mark.area]}
-        </span>
+    <div className="rounded-xl border border-border px-3.5 py-2.5">
+      <div className={`flex items-center gap-2.5 ${dim}`}>
+        <span className={`h-2.5 w-2.5 rounded-full ${AREA_DOT[mark.area]}`} />
+        <span className={`text-sm font-bold ${AREA_TEXT[mark.area]}`}>{AREA_KO[mark.area]}</span>
       </div>
-      <span className="text-xs font-semibold text-muted-foreground">{SEVERITY_KO[mark.severity]}</span>
-    </div>
-  );
-}
-
-function FeedbackQuote({ label, message }: { label: string; message: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-xs font-bold text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm font-semibold">{message}</p>
+      {mark.message && <p className="mt-1.5 text-sm text-muted-foreground">{mark.message}</p>}
     </div>
   );
 }

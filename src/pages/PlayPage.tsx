@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
-import { BarView } from '@/components/sheet/BarView';
-import { UserIcon } from '@/components/icons';
+import { BarView, LaneGutter } from '@/components/sheet/BarView';
+import { CheckIcon, HistoryIcon, PitchIcon, RhythmIcon, UserIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import { LYRICS, SONG } from '@/data/song';
 import {
   ANALYSIS_WINDOW_BARS,
   FEEDBACK_SEQUENCE,
   currentMarksUpToWindow,
+  previousCautionsForWindow,
   previousMarksByBar,
   type Area,
+  type Caution,
   type Feedback,
   type Mark,
 } from '@/data/session';
@@ -187,12 +188,13 @@ function PermissionView({
 }
 
 /* ──────────────────────────────────────────────────────────────── */
-/* 2. 전주(메트로놈) — /play 위에 모달로 띄움. 박자 감 + 들어갈 준비 시간 제공. */
+/* 2. 전주(메트로놈) 카운트인 — 노래방처럼 악보 카드 '안에서' 박자를 센다. */
 
 const INTRO_BEATS = 8;
 const INTRO_ACCENT_EVERY = SONG.beatsPerBar; // 4박마다 강박
 
-function MetronomeOverlay({ onDone }: { onDone: () => void }) {
+/** 전주 메트로놈 오디오 + 박자 카운트 진행. 현재 비트(-1=시작 전)를 반환. */
+function useMetronomeIntro(onDone: () => void) {
   const [currentBeat, setCurrentBeat] = useState(-1);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -236,50 +238,47 @@ function MetronomeOverlay({ onDone }: { onDone: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  return currentBeat;
+}
+
+/** 악보 카드 위에 겹쳐지는 카운트인 오버레이 — 큰 박자 숫자 + 8비트 도트. */
+function CountInOverlay({ onDone }: { onDone: () => void }) {
+  const currentBeat = useMetronomeIntro(onDone);
   const beatInBar = currentBeat < 0 ? 1 : (currentBeat % SONG.beatsPerBar) + 1;
-  const barNumber = currentBeat < 0 ? 1 : Math.floor(currentBeat / SONG.beatsPerBar) + 1;
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/10 p-4">
-      <div className="flex w-full max-w-sm flex-col items-center gap-9 rounded-3xl bg-card/95 px-8 py-12 shadow-modal">
-        <div className="space-y-2 text-center">
-          <p className="text-sm font-bold">박자에 맞춰 들어갈 준비</p>
-          <p className="tabular text-xs text-muted-foreground">
-            전주 {barNumber}/{INTRO_BEATS / SONG.beatsPerBar}마디
-          </p>
-        </div>
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 rounded-2xl bg-card/85 backdrop-blur-[2px]">
+      <p className="text-sm font-bold text-muted-foreground">곧 연주가 시작됩니다</p>
 
-        {/* 큰 박자 카운터 (1→2→3→4 반복) */}
-        <p
-          key={currentBeat}
-          className="animate-press tabular text-[120px] font-bold leading-none tracking-tight"
-        >
-          {beatInBar}
-        </p>
+      {/* 큰 박자 카운터 (1→2→3→4 반복) */}
+      <p
+        key={currentBeat}
+        className="animate-press tabular text-8xl font-bold leading-none tracking-tight"
+      >
+        {beatInBar}
+      </p>
 
-        {/* 8비트 도트 인디케이터 */}
-        <div className="flex items-center gap-3">
-          {Array.from({ length: INTRO_BEATS }).map((_, i) => {
-            const isAccent = i % INTRO_ACCENT_EVERY === 0;
-            const isActive = i === currentBeat;
-            const isPast = i < currentBeat;
-            const sizeCls = isAccent ? 'h-4 w-4' : 'h-2.5 w-2.5';
-            const colorCls = isActive
-              ? 'bg-foreground scale-150'
-              : isPast
-                ? 'bg-gray-400'
-                : 'bg-gray-200';
-            return (
-              <span
-                key={i}
-                className={`rounded-full transition-all duration-150 ${sizeCls} ${colorCls}`}
-              />
-            );
-          })}
-        </div>
+      {/* 8비트 도트 인디케이터 */}
+      <div className="flex items-center gap-3">
+        {Array.from({ length: INTRO_BEATS }).map((_, i) => {
+          const isAccent = i % INTRO_ACCENT_EVERY === 0;
+          const isActive = i === currentBeat;
+          const isPast = i < currentBeat;
+          const sizeCls = isAccent ? 'h-3.5 w-3.5' : 'h-2 w-2';
+          const colorCls = isActive
+            ? 'bg-foreground scale-150'
+            : isPast
+              ? 'bg-gray-400'
+              : 'bg-gray-200';
+          return (
+            <span
+              key={i}
+              className={`rounded-full transition-all duration-150 ${sizeCls} ${colorCls}`}
+            />
+          );
+        })}
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }
 
@@ -363,7 +362,6 @@ function PlayingView({
     Math.floor(elapsed / WINDOW_DURATION),
     TOTAL_WINDOWS - 1,
   );
-  const progressInWindow = (elapsed % WINDOW_DURATION) / WINDOW_DURATION;
 
   const currentMarks = useMemo(
     () => currentMarksUpToWindow(currentWindowIndex),
@@ -371,29 +369,21 @@ function PlayingView({
   );
   const previousMarks = useMemo(() => previousMarksByBar(), []);
 
-  const currentFeedback: Feedback | null = useMemo(() => {
-    return FEEDBACK_SEQUENCE[currentWindowIndex] ?? null;
-  }, [currentWindowIndex]);
+  const currentFeedbacks: Feedback[] = useMemo(
+    () => FEEDBACK_SEQUENCE[currentWindowIndex] ?? [],
+    [currentWindowIndex],
+  );
 
-  const areaStatus = useMemo(() => {
-    const fb = FEEDBACK_SEQUENCE[currentWindowIndex];
-    const status: Record<Area, 'good' | 'mild' | 'major'> = {
-      pitch: 'good',
-      rhythm: 'good',
-      posture: 'good',
-    };
-    if (fb && 'mark' in fb && fb.mark) status[fb.mark.area] = fb.mark.severity;
-    return status;
-  }, [currentWindowIndex]);
+  const previousCautions = useMemo(
+    () => previousCautionsForWindow(currentWindowIndex),
+    [currentWindowIndex],
+  );
 
   // 자세 영역이 활성(피드백 area=posture 또는 영역 전환 to=posture)일 때 영상 카드 강조
-  const isPostureAlert = useMemo(() => {
-    const fb = currentFeedback;
-    if (!fb) return false;
-    if (fb.tone === 'normal') return fb.area === 'posture';
-    if (fb.tone === 'switch') return fb.to === 'posture';
-    return false;
-  }, [currentFeedback]);
+  const isPostureAlert = useMemo(
+    () => currentFeedbacks.some((fb) => fb.tone === 'normal' && fb.area === 'posture'),
+    [currentFeedbacks],
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -462,39 +452,21 @@ function PlayingView({
               currentMarks={currentMarks}
               previousMarks={previousMarks}
               isFinished={isFinished}
+              introActive={!introDone}
+              onIntroDone={handleIntroDone}
             />
           </div>
         </div>
 
-        {/* 피드백 */}
-        <section className="min-h-[80px]">
-          <FeedbackBar
-            feedback={currentFeedback}
-            barProgress={progressInWindow}
-            barIndex={currentWindowIndex}
-          />
-        </section>
-
-        {/* 상태바 */}
-        <section className="flex items-center justify-between rounded-2xl border border-border bg-card px-5 py-4 shadow-soft">
-          <div className="flex items-center gap-5">
-            <StatusDot area="pitch" status={areaStatus.pitch} label="음정" />
-            <StatusDot area="rhythm" status={areaStatus.rhythm} label="박자" />
-            <StatusDot area="posture" status={areaStatus.posture} label="자세" />
+        {/* 피드백 — 좌: 지난 연주 / 우: 현재. 50:50 고정(동적 X). 없으면 '없음'을 명시. */}
+        <section className="flex items-stretch gap-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <PreviousCaution key={`caution-${currentWindowIndex}`} cautions={previousCautions} />
+            <FeedbackCaption tone="previous" />
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`h-2 w-2 rounded-full ${stream ? 'bg-foreground' : 'bg-gray-300'}`}
-              />
-              카메라
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`h-2 w-2 rounded-full ${stream ? 'bg-foreground' : 'bg-gray-300'}`}
-              />
-              마이크
-            </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <CurrentFeedback feedbacks={currentFeedbacks} barIndex={currentWindowIndex} />
+            <FeedbackCaption tone="current" />
           </div>
         </section>
 
@@ -502,9 +474,9 @@ function PlayingView({
           <Card>
             <CardContent className="flex items-center justify-between p-5">
               <div>
-                <p className="text-sm font-bold">연주가 끝났습니다</p>
-                <p className="text-xs text-muted-foreground">
-                  이번 연주가 보관함에 자동 저장되었습니다 · 결과에서 마킹 누적을 확인하세요
+                <p className="text-lg font-bold">연주가 끝났습니다</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  이번 연주가 보관함에 자동 저장되었습니다 결과를 확인해주세요
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
@@ -537,8 +509,6 @@ function PlayingView({
           </div>
         </div>
       </Modal>
-
-      {!introDone && <MetronomeOverlay onDone={handleIntroDone} />}
     </div>
   );
 }
@@ -600,7 +570,7 @@ function CameraStage({
       {!duet && (
         <div className="flex items-center justify-between px-5 py-3">
           <p className="text-sm font-bold">연주 자세</p>
-          <p className="text-xs text-muted-foreground">손목·팔꿈치·손가락·어깨·엄지</p>
+          <p className="text-xs text-muted-foreground">좋은 연주는 바른 자세에서 시작돼요</p>
         </div>
       )}
     </div>
@@ -609,12 +579,6 @@ function CameraStage({
 
 /* ──────────────────────────────────────────────────────────────── */
 /* 협주 상대 — 선택한 녹음을 함께 재생(듀엣). 실제 미디어 없이 placeholder. */
-
-const PARTNER_AVATAR_BG: Record<Area, string> = {
-  pitch: 'bg-pitch/20 text-pitch',
-  rhythm: 'bg-rhythm/20 text-rhythm',
-  posture: 'bg-posture/20 text-posture',
-};
 
 function PartnerStage({
   recording,
@@ -631,22 +595,17 @@ function PartnerStage({
   const pct = Math.min(Math.max(progress, 0), 1) * 100;
   return (
     <div className={`flex flex-col overflow-hidden rounded-2xl border-2 border-border bg-card shadow-card ${duet ? 'h-full' : ''}`}>
-      <div className={`relative bg-gray-900 ${duet ? 'min-h-0 flex-1' : 'aspect-video'}`}>
+      <div className={`relative bg-foreground ${duet ? 'min-h-0 flex-1' : 'aspect-video'}`}>
         {/* placeholder: 녹화 영상 자리 */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-          <div
-            className={`flex h-16 w-16 items-center justify-center rounded-full ${PARTNER_AVATAR_BG[recording.avatarAccent]}`}
-          >
-            <UserIcon className="h-8 w-8" />
-          </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
           <p className="text-sm font-semibold text-background/80">{recording.playerName} 님의 녹화</p>
         </div>
-        <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-background/15 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
+        <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-foreground/55 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
           <span className={`h-1.5 w-1.5 rounded-full ${playing ? 'bg-posture' : 'bg-gray-400'}`} />
           REC 재생
         </div>
-        <div className="absolute right-3 top-3 rounded-full bg-background/15 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
-          협주 상대
+        <div className="absolute right-3 top-3 rounded-full bg-foreground/55 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
+          {recording.playerName}
         </div>
         {/* 재생 진행바 (내 연주와 동기화) */}
         <div className="absolute inset-x-0 bottom-0 h-1 bg-background/20">
@@ -677,23 +636,28 @@ function SheetStage({
   currentMarks,
   previousMarks,
   isFinished,
+  introActive,
+  onIntroDone,
 }: {
   currentBarIndex: number;
   progressInBar: number;
   currentMarks: Map<number, Mark[]>;
   previousMarks: Map<number, Mark[]>;
   isFinished: boolean;
+  introActive: boolean;
+  onIntroDone: () => void;
 }) {
-  // 6마디(1줄) 단위 페이지. 24마디 = 4페이지 (1절 = 0·1, 2절 = 2·3).
-  const BARS_PER_PAGE = 6;
+  // 4마디 × 1줄 = 4마디/페이지. 한 줄에 마디를 적게 둬 음표를 키운다.
+  const BARS_PER_ROW = 4;
+  const ROWS_PER_PAGE = 1;
+  const BARS_PER_PAGE = BARS_PER_ROW * ROWS_PER_PAGE;
   const TOTAL_PAGES = Math.ceil(SONG.bars.length / BARS_PER_PAGE);
   const pageIndex = Math.min(Math.floor(currentBarIndex / BARS_PER_PAGE), TOTAL_PAGES - 1);
-  const startBar = pageIndex * BARS_PER_PAGE;
-  const pageBars = SONG.bars.slice(startBar, startBar + BARS_PER_PAGE);
-  const verseLabel = pageIndex < TOTAL_PAGES / 2 ? '1절' : '2절';
+  const pageStart = pageIndex * BARS_PER_PAGE;
+  const verseLabel = currentBarIndex < SONG.bars.length / 2 ? '1절' : '2절';
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <p className="text-sm font-bold">악보</p>
         <div className="flex items-center gap-2.5">
@@ -712,27 +676,40 @@ function SheetStage({
       </div>
       <div
         key={pageIndex}
-        className="animate-feedback-in flex flex-1 items-center px-5 py-6"
+        className="animate-feedback-in flex flex-1 flex-col justify-center gap-6 px-5 py-6"
       >
-        <div className="grid w-full grid-cols-6 gap-3">
-          {pageBars.map((bar, i) => {
-            const barIndex = startBar + i;
-            const isCurrent = barIndex === currentBarIndex && !isFinished;
-            return (
-              <BarView
-                key={barIndex}
-                barIndex={barIndex}
-                notes={bar}
-                isCurrent={isCurrent}
-                progress={isCurrent ? progressInBar : 0}
-                previousMarks={previousMarks.get(barIndex) ?? []}
-                currentMarks={currentMarks.get(barIndex) ?? []}
-                lyrics={LYRICS[barIndex]}
-              />
-            );
-          })}
-        </div>
+        {Array.from({ length: ROWS_PER_PAGE }).map((_, r) => {
+          const rowStart = pageStart + r * BARS_PER_ROW;
+          if (rowStart >= SONG.bars.length) return null;
+          const rowBars = SONG.bars.slice(rowStart, rowStart + BARS_PER_ROW);
+          return (
+            <div key={r} className="flex w-full items-start gap-3">
+              <LaneGutter staffSpacerClassName="h-24" />
+              <div className="grid min-w-0 flex-1 grid-cols-4 gap-3">
+                {rowBars.map((bar, i) => {
+                  const barIndex = rowStart + i;
+                  const isCurrent = barIndex === currentBarIndex && !isFinished;
+                  return (
+                    <BarView
+                      key={barIndex}
+                      barIndex={barIndex}
+                      notes={bar}
+                      isCurrent={isCurrent}
+                      progress={isCurrent ? progressInBar : 0}
+                      previousMarks={previousMarks.get(barIndex) ?? []}
+                      currentMarks={currentMarks.get(barIndex) ?? []}
+                      lyrics={LYRICS[barIndex]}
+                      staffClassName="h-24"
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {introActive && <CountInOverlay onDone={onIntroDone} />}
     </div>
   );
 }
@@ -744,112 +721,143 @@ const AREA_BG_LIGHT: Record<Area, string> = {
   rhythm: 'bg-rhythm/10',
   posture: 'bg-posture/10',
 };
-const AREA_DOT: Record<Area, string> = {
+const AREA_SOLID: Record<Area, string> = {
   pitch: 'bg-pitch',
   rhythm: 'bg-rhythm',
   posture: 'bg-posture',
 };
-const AREA_TEXT: Record<Area, string> = {
-  pitch: 'text-pitch',
-  rhythm: 'text-rhythm',
-  posture: 'text-posture',
+const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
+const AREA_ICON: Record<Area, (p: { className?: string }) => JSX.Element> = {
+  pitch: PitchIcon,
+  rhythm: RhythmIcon,
+  posture: UserIcon,
 };
 
-function FeedbackBar({
-  feedback,
-  barProgress,
-  barIndex,
-}: {
-  feedback: Feedback | null;
-  barProgress: number;
-  barIndex: number;
-}) {
-  if (!feedback) {
+/** 영역 배지 — 아이콘 + 영역 이름 (음정/박자/자세) */
+function AreaBadge({ area }: { area: Area }) {
+  const Icon = AREA_ICON[area];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${AREA_SOLID[area]}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {AREA_KO[area]}
+    </span>
+  );
+}
+
+const FEEDBACK_BASE =
+  'animate-feedback-in flex min-h-[110px] min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl px-5 py-4 text-center';
+
+/**
+ * 현재 라이브 피드백 — 한 윈도우에서 동시에 여러 영역 지적이 올 수 있다.
+ * 영역별 블록(배지 + 메시지)을 한 카드에 쌓아 '동시 다중 영역'을 한눈에 보여준다.
+ */
+function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIndex: number }) {
+  // 분석 부족(빈 윈도우)
+  if (feedbacks.length === 0) {
     return (
       <div
         key={`empty-${barIndex}`}
-        className="animate-feedback-in flex min-h-[110px] items-center justify-center rounded-2xl border border-dashed border-border bg-background px-5 text-sm text-muted-foreground"
+        className="animate-feedback-in flex min-h-[110px] min-w-0 flex-1 items-center justify-center rounded-2xl border border-dashed border-border bg-background px-5 text-sm text-muted-foreground"
       >
         다음 마디의 피드백을 분석 중…
       </div>
     );
   }
 
-  // 영역 결정: normal=area, switch=to(가이드 대상)
-  const area: Area | null =
-    feedback.tone === 'normal'
-      ? feedback.area
-      : feedback.tone === 'switch'
-        ? feedback.to
-        : null;
-
-  // 톤별 베이스 스타일
-  const baseBg = area ? AREA_BG_LIGHT[area] : 'bg-gray-50';
-  const dotCls = area ? AREA_DOT[area] : 'bg-gray-400';
-  const textCls = area ? AREA_TEXT[area] : 'text-muted-foreground';
-
-  // 라벨
-  const label =
-    feedback.tone === 'positive' ? '칭찬' : feedback.tone === 'switch' ? feedback.label : feedback.label;
-
-  // 부제 (영역 전환만 부연 설명)
-  const subtitle = feedback.tone === 'switch' ? '영역 전환 가이드' : null;
-
-  return (
-    <div
-      key={`fb-${barIndex}-${feedback.action}`}
-      className={`animate-feedback-in overflow-hidden rounded-2xl ${baseBg}`}
-    >
-      <div className="space-y-2 px-5 py-4">
-        <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${dotCls}`} />
-          <span className={`text-xs font-bold tracking-wide ${textCls}`}>{label}</span>
-          {subtitle && (
-            <span className="text-xs font-medium text-muted-foreground">· {subtitle}</span>
-          )}
-        </div>
-        <p className="text-[26px] font-bold leading-snug tracking-tight">{feedback.action}</p>
-        <p className="text-sm text-muted-foreground">{feedback.message}</p>
+  // 칭찬 — 영역색 없는 '보상' 모드 (체크 + 중립 카드)
+  if (feedbacks.length === 1 && feedbacks[0].tone === 'positive') {
+    return (
+      <div
+        key={`fb-${barIndex}`}
+        className={`${FEEDBACK_BASE} border border-border bg-card shadow-soft`}
+      >
+        <span className="inline-flex items-center gap-1 rounded-md bg-foreground px-2 py-1 text-xs font-bold text-background">
+          <CheckIcon className="h-3.5 w-3.5" />
+          칭찬
+        </span>
+        <p className="text-xl font-bold leading-snug tracking-tight">{feedbacks[0].message}</p>
       </div>
-      {/* 잔여 시간 progress — 시간이 흐를수록 줄어듦 */}
-      <div className="h-1 bg-foreground/5">
+    );
+  }
+
+  // 지적 1개 이상 — 영역별 블록을 한 카드에 쌓는다.
+  const issues = feedbacks.filter(
+    (fb): fb is Extract<Feedback, { tone: 'normal' }> => fb.tone === 'normal',
+  );
+  const multi = issues.length > 1;
+  // 다중이면 한 영역색으로 칠할 수 없으니 중립 카드, 단일이면 영역 틴트.
+  const bg = multi ? 'border border-border bg-card shadow-soft' : AREA_BG_LIGHT[issues[0].area];
+  return (
+    <div key={`fb-${barIndex}`} className={`${FEEDBACK_BASE} ${bg}`}>
+      {issues.map((fb, i) => (
         <div
-          className="h-full bg-foreground/30 transition-[width] duration-100 ease-linear"
-          style={{ width: `${Math.max(0, 1 - barProgress) * 100}%` }}
-        />
+          key={i}
+          className={`flex flex-col items-center gap-1.5 ${
+            i > 0 ? 'w-full border-t border-border/60 pt-3' : ''
+          }`}
+        >
+          <AreaBadge area={fb.area} />
+          <p
+            className={`font-bold leading-snug tracking-tight ${multi ? 'text-base' : 'text-xl'}`}
+          >
+            {fb.message}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 블록 밑 캡션 — 이 블록이 지난/현재 연주 피드백임을 안내. */
+function FeedbackCaption({ tone }: { tone: 'previous' | 'current' }) {
+  if (tone === 'previous') {
+    return (
+      <p className="flex items-center justify-center gap-1 text-center text-sm font-bold text-muted-foreground">
+        <HistoryIcon className="h-4 w-4" />
+        지난 연주 피드백이에요!
+      </p>
+    );
+  }
+  return <p className="text-center text-sm font-bold text-foreground">현재 연주 피드백이에요!</p>;
+}
+
+/**
+ * 지난 연주 피드백 — 라이브 피드백보다 조용하게(ghost·점선). 블록 안은 현재 피드백과
+ * 동일하게 중앙정렬(배지 + 메시지). 여러 마킹은 한 카드에 묶어 과밀을 막는다.
+ */
+function PreviousCaution({ cautions }: { cautions: Caution[] }) {
+  // 위치 고정 — 비어도 자리를 지키고 '없음'을 명시.
+  if (cautions.length === 0) {
+    return (
+      <div className="flex min-h-[110px] min-w-0 flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-muted/40 px-5 text-center text-sm text-muted-foreground">
+        이 구간은 지난 연주에 받은 피드백이 없어요
       </div>
-    </div>
-  );
-}
-
-function StatusDot({
-  area,
-  status,
-  label,
-}: {
-  area: Area;
-  status: 'good' | 'mild' | 'major';
-  label: string;
-}) {
-  const dotClass =
-    status === 'good'
-      ? 'bg-gray-200'
-      : status === 'mild'
-        ? area === 'pitch'
-          ? 'bg-pitch/60'
-          : area === 'rhythm'
-            ? 'bg-rhythm/60'
-            : 'bg-posture/60'
-        : area === 'pitch'
-          ? 'bg-pitch'
-          : area === 'rhythm'
-            ? 'bg-rhythm'
-            : 'bg-posture';
-
+    );
+  }
+  // 현재 피드백과 글씨 크기 규칙 통일 — 다중이면 text-base, 단일이면 text-xl.
+  const multi = cautions.length > 1;
   return (
-    <div className="flex items-center gap-2">
-      <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
-      <span className="text-sm font-semibold">{label}</span>
+    <div className="animate-feedback-in flex min-h-[110px] min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/40 px-4 py-4 text-center">
+      {cautions.map((c, i) => (
+        <div
+          key={i}
+          className={`flex flex-col items-center gap-1.5 ${
+            i > 0 ? 'w-full border-t border-border/60 pt-3' : ''
+          }`}
+        >
+          <AreaBadge area={c.area} />
+          <p
+            className={`font-bold leading-snug tracking-tight text-muted-foreground ${
+              multi ? 'text-base' : 'text-xl'
+            }`}
+          >
+            {c.message}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
+

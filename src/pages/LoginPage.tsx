@@ -37,7 +37,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm space-y-8">
         <header className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">캡스톤 디자인</h1>
+          <h1 className="text-2xl font-bold tracking-tight">CAPSTONE DESIGN</h1>
           <p className="text-sm text-muted-foreground">로그인하고 연주를 시작하세요</p>
         </header>
 
