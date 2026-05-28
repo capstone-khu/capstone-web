@@ -34,6 +34,31 @@ export function scheduleSong(ctx: AudioContext, startTime: number) {
 }
 
 /**
+ * 특정 마디 구간 [fromBar..toBar] 을 loops회 반복 스케줄 — 집중 반복 레슨용.
+ * 각 반복은 프레이즈 길이만큼 이어 붙는다.
+ */
+export function scheduleBarsLoop(
+  ctx: AudioContext,
+  startTime: number,
+  fromBar: number,
+  toBar: number,
+  loops: number,
+) {
+  const beatSec = 60 / SONG.bpm;
+  const barsCount = toBar - fromBar + 1;
+  const phraseSec = barsCount * SONG.beatsPerBar * beatSec;
+  for (let loop = 0; loop < loops; loop++) {
+    const loopStart = startTime + loop * phraseSec;
+    for (let b = fromBar; b <= toBar; b++) {
+      SONG.bars[b].forEach((pitch: Pitch, noteIdx) => {
+        const when = loopStart + ((b - fromBar) * SONG.beatsPerBar + noteIdx) * beatSec;
+        scheduleNote(ctx, PITCH_FREQ[pitch], when, beatSec * 0.9);
+      });
+    }
+  }
+}
+
+/**
  * 메트로놈 클릭 — 짧고 단단한 톤. 강박(beat 0, 4, 8…)은 좀 더 높고 크게,
  * 약박은 옅게. 노래방 전주 시 박자 감 잡기 위해 사용.
  */

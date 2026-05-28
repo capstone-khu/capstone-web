@@ -11,6 +11,7 @@ import {
   ANALYSIS_WINDOW_BARS,
   currentMarksUpToWindow,
   marksFromSummary,
+  marksFromBarFails,
   previousMarksByBar,
   type Area,
   type Mark,
@@ -42,7 +43,6 @@ export default function ResultPage() {
   const location = useLocation();
   const mode = usePlaySession((s) => s.mode);
   const recordingId = usePlaySession((s) => s.recordingId);
-  const replay = usePlaySession((s) => s.replay);
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
   const [page, setPage] = useState(0);
 
@@ -55,14 +55,18 @@ export default function ResultPage() {
   // 협주 배지는 방금 끝난 연주에만 (과거 내 기록은 단독 연주).
   const partner = !isHistory && mode === 'ensemble' ? getRecording(recordingId) : null;
 
-  const onReplay = () => {
-    replay();
-    navigate('/play');
-  };
+  // '다시 연주' 대신, 세션 후 AI 코치 디브리핑으로 이동. 과거 기록 맥락이면 그 recordingId를 넘긴다.
+  const goCoach = () =>
+    navigate('/coach', { state: historyId ? { recordingId: historyId } : undefined });
 
   // 방금 끝난 연주 = 라이브 피드백 시퀀스 그대로. 과거 기록 = 그 기록의 요약으로부터 분포 생성.
   const currentMarks = useMemo(
-    () => (historyRec ? marksFromSummary(historyRec.summary) : currentMarksUpToWindow(TOTAL_WINDOWS - 1)),
+    () =>
+      historyRec
+        ? historyRec.barFails
+          ? marksFromBarFails(historyRec.barFails)
+          : marksFromSummary(historyRec.summary)
+        : currentMarksUpToWindow(TOTAL_WINDOWS - 1),
     [historyRec],
   );
   const previousMarks = useMemo(() => previousMarksByBar(), []);
@@ -86,8 +90,8 @@ export default function ResultPage() {
             <Button size="sm" variant="outline" onClick={() => navigate(isHistory ? '/mypage' : '/')}>
               {isHistory ? '목록으로' : '홈으로'}
             </Button>
-            <Button size="sm" onClick={onReplay}>
-              다시 연주
+            <Button size="sm" onClick={goCoach}>
+              AI 상세 분석
             </Button>
           </>
         }
@@ -147,8 +151,8 @@ export default function ResultPage() {
           <Button variant="outline" size="lg" onClick={() => navigate(isHistory ? '/mypage' : '/')}>
             {isHistory ? '목록으로' : '홈으로'}
           </Button>
-          <Button size="lg" onClick={onReplay}>
-            다시 연주
+          <Button size="lg" onClick={goCoach}>
+            AI 상세 분석
           </Button>
         </div>
       </main>

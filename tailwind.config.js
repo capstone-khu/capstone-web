@@ -102,6 +102,10 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        'page-in': {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
         'sheet-up': {
           '0%': { opacity: '0', transform: 'translateY(16px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
@@ -114,6 +118,7 @@ export default {
       animation: {
         press: 'press 180ms ease-in-out',
         'feedback-in': 'feedback-in 280ms cubic-bezier(0.4, 0, 0.2, 1)',
+        'page-in': 'page-in 300ms cubic-bezier(0.4, 0, 0.2, 1)',
         'sheet-up': 'sheet-up 240ms cubic-bezier(0.4, 0, 0.2, 1)',
         'dot-bounce': 'dot-bounce 1.2s ease-in-out infinite',
       },

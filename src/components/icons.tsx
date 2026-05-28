@@ -40,6 +40,16 @@ export function RhythmIcon({ className }: { className?: string }) {
   );
 }
 
+/** 자세 — 사람 */
+export function PostureIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="6" r="3" />
+      <path d="M6 21v-1a6 6 0 0112 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1z" />
+    </svg>
+  );
+}
+
 /** 칭찬 — 체크 */
 export function CheckIcon({ className }: { className?: string }) {
   return (

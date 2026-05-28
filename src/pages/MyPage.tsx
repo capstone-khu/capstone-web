@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { MY_RECORDINGS, type Recording, type RecordingSummary } from '@/data/recordings';
+import { MY_RECORDINGS, REPEAT_WEAK, type RecordingSummary } from '@/data/recordings';
 import type { Area } from '@/data/session';
 import { ChevronLeftIcon } from '@/components/icons';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -9,12 +9,6 @@ import { usePlaySession } from '@/store/usePlaySession';
 import { AppHeader } from '@/components/AppHeader';
 
 const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_JOSA: Record<Area, string> = { pitch: '을', rhythm: '를', posture: '를' };
-const AREA_TEXT: Record<Area, string> = {
-  pitch: 'text-pitch',
-  rhythm: 'text-rhythm',
-  posture: 'text-posture',
-};
 const AREA_PILL: Record<Area, string> = {
   pitch: 'bg-pitch/10 text-pitch',
   rhythm: 'bg-rhythm/10 text-rhythm',
@@ -40,31 +34,27 @@ function AreaStatGrid({ summary }: { summary: RecordingSummary }) {
   );
 }
 
-/** 이력 전체에서 영역별 피드백 개수를 합산해 가장 많은(=가장 약한) 영역을 찾는다. */
-function weakestArea(recs: Recording[]): Area | null {
-  const totals: Record<Area, number> = { pitch: 0, rhythm: 0, posture: 0 };
-  for (const r of recs) {
-    totals.pitch += r.summary.pitch;
-    totals.rhythm += r.summary.rhythm;
-    totals.posture += r.summary.posture;
-  }
-  const ranked = (Object.entries(totals) as [Area, number][]).reduce((a, b) =>
-    b[1] > a[1] ? b : a,
-  );
-  return ranked[1] > 0 ? ranked[0] : null;
-}
-
-/** 약점 영역 코칭 배너 — "다음엔 '음정'을 좀 더 신경써 볼까요?" */
-function WeakAreaCoach({ area }: { area: Area }) {
+/** 세션 간 반복 실패 마디 → 집중 반복 레슨 추천 배너 */
+function RepeatBarCoach({
+  bar,
+  lessons,
+  onStart,
+}: {
+  bar: number;
+  lessons: number;
+  onStart: () => void;
+}) {
   return (
     <Card>
-      <CardContent className="p-4">
-        <p className="text-center text-sm leading-relaxed">
-          지금까지 <span className={`font-bold ${AREA_TEXT[area]}`}>{AREA_KO[area]}</span> 피드백이
-          가장 많았어요. 다음엔{' '}
-          <span className={`font-bold ${AREA_TEXT[area]}`}>{AREA_KO[area]}</span>
-          {AREA_JOSA[area]} 좀 더 신경써 볼까요?
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm leading-relaxed">
+          <span className="font-bold">마디 {bar + 1}</span>을 최근{' '}
+          <span className="font-bold">{lessons}번</span> 레슨에서 놓쳤어요. 이 마디만 집중해서 반복
+          연습해볼까요?
         </p>
+        <Button size="sm" className="shrink-0" onClick={onStart}>
+          집중 반복 레슨
+        </Button>
       </CardContent>
     </Card>
   );
@@ -75,7 +65,13 @@ export default function MyPage() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const startSolo = usePlaySession((s) => s.startSolo);
-  const weak = weakestArea(MY_RECORDINGS);
+  const startFocus = usePlaySession((s) => s.startFocus);
+
+  const startFocusLesson = (bar: number) => {
+    startFocus(bar);
+    navigate('/play');
+  };
+  const repeat = REPEAT_WEAK;
 
   const handleLogout = () => {
     logout();
@@ -108,7 +104,13 @@ export default function MyPage() {
 
         {/* 연주 이력 */}
         <section className="space-y-3">
-          {weak && <WeakAreaCoach area={weak} />}
+          {repeat && (
+            <RepeatBarCoach
+              bar={repeat.bar}
+              lessons={repeat.lessons}
+              onStart={() => startFocusLesson(repeat.bar)}
+            />
+          )}
           <ul className="space-y-2.5">
             {MY_RECORDINGS.map((rec) => (
               <li key={rec.id}>

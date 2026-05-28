@@ -216,6 +216,34 @@ export function marksFromSummary(summary: Record<Area, number>): Map<number, Mar
   return map;
 }
 
+/**
+ * 마디별 실패 기록(barFails)을 bar 인덱스 마킹 Map으로 변환 — 과거 기록의 실제 틀린 마디를 그대로 표시.
+ */
+export function marksFromBarFails(barFails: { bar: number; area: Area }[]): Map<number, Mark[]> {
+  const map = new Map<number, Mark[]>();
+  for (const f of barFails) {
+    const arr = map.get(f.bar) ?? [];
+    arr.push({ area: f.area, severity: 'major', message: SAMPLE_MESSAGE[f.area].major });
+    map.set(f.bar, arr);
+  }
+  return map;
+}
+
+/**
+ * 방금 끝난 라이브 세션의 영역별 피드백 횟수 요약.
+ * 과거 기록(Recording.summary)과 같은 포맷이라 세션 후 코치 리포트 입력으로 그대로 쓴다.
+ */
+export function liveSessionSummary(): Record<Area, number> {
+  const s: Record<Area, number> = { pitch: 0, rhythm: 0, posture: 0 };
+  for (const fbs of FEEDBACK_SEQUENCE) {
+    if (!fbs) continue;
+    for (const fb of fbs) {
+      if (fb.tone === 'normal') s[fb.area] += 1;
+    }
+  }
+  return s;
+}
+
 /** FEEDBACK_SEQUENCE 중 윈도우 0..upToWindow(포함) 까지의 mark들을 bar 인덱스로 펼쳐 키잉 */
 export function currentMarksUpToWindow(upToWindow: number): Map<number, Mark[]> {
   const map = new Map<number, Mark[]>();

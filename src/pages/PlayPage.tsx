@@ -18,7 +18,7 @@ import {
   type Feedback,
   type Mark,
 } from '@/data/session';
-import { scheduleMetronome, scheduleSong } from '@/lib/audio';
+import { scheduleMetronome, scheduleSong, scheduleBarsLoop } from '@/lib/audio';
 import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
 import { getRecording, formatDuration, type Recording } from '@/data/recordings';
 
@@ -35,6 +35,7 @@ export default function PlayPage() {
   const mode = usePlaySession((s) => s.mode);
   const recordingId = usePlaySession((s) => s.recordingId);
   const skipPermission = usePlaySession((s) => s.skipPermission);
+  const focusBar = usePlaySession((s) => s.focusBar);
   const recording = getRecording(recordingId);
 
   const [stage, setStage] = useState<Stage>('permission');
@@ -103,6 +104,7 @@ export default function PlayPage() {
       stream={stream}
       mode={mode}
       recording={recording}
+      focusBar={focusBar}
       onFinish={handleFinish}
       onExit={handleExit}
     />
@@ -115,7 +117,15 @@ export default function PlayPage() {
 function PrepLoader() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6">
-      <div className="h-10 w-10 animate-spin rounded-full border-2 border-gray-200 border-t-foreground" />
+      <div className="flex gap-2">
+        {[0, 150, 300].map((d) => (
+          <span
+            key={d}
+            className="h-3 w-3 animate-bounce rounded-full bg-foreground"
+            style={{ animationDelay: `${d}ms` }}
+          />
+        ))}
+      </div>
       <p className="text-sm font-medium text-muted-foreground">연주 준비 중…</p>
     </div>
   );
@@ -289,16 +299,28 @@ function PlayingView({
   stream,
   mode,
   recording,
+  focusBar,
   onFinish,
   onExit,
 }: {
   stream: MediaStream | null;
   mode: PlayMode;
   recording: Recording | null;
+  focusBar: number | null;
   onFinish: () => void;
   onExit: () => void;
 }) {
   const isEnsemble = mode === 'ensemble' && !!recording;
+
+  // 집중 반복 레슨 — 틀린 '그 한 마디'만 반복(loop)한다.
+  const focused = focusBar != null;
+  const FOCUS_LOOPS = 10;
+  const phraseStart = focused ? focusBar : 0;
+  const phraseEnd = focused ? focusBar : TOTAL_BARS - 1;
+  const phraseBars = phraseEnd - phraseStart + 1;
+  const PHRASE_DURATION = phraseBars * BAR_DURATION;
+  const focusDuration = PHRASE_DURATION * FOCUS_LOOPS;
+
   const [elapsed, setElapsed] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isFinished, setIsFinished] = useState(false);
@@ -316,10 +338,24 @@ function PlayingView({
       audioCtxRef.current = ctx;
       ctx.resume().then(() => {
         songStartTimeRef.current = ctx.currentTime;
-        scheduleSong(ctx, songStartTimeRef.current);
+        if (focused) {
+          scheduleBarsLoop(ctx, songStartTimeRef.current, phraseStart, phraseEnd, FOCUS_LOOPS);
+        } else {
+          scheduleSong(ctx, songStartTimeRef.current);
+        }
       });
     }
     setIntroDone(true);
+  };
+
+  // 집중 반복 '다시 한 번' — 카운트인부터 재시작.
+  const restartFocus = () => {
+    audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+    setElapsed(0);
+    setIsFinished(false);
+    setIsPlaying(true);
+    setIntroDone(false);
   };
 
   useEffect(() => {
@@ -341,8 +377,9 @@ function PlayingView({
     const tick = () => {
       const ac = audioCtxRef.current;
       const now = ac ? ac.currentTime - songStartTimeRef.current : 0;
-      if (now >= TOTAL_DURATION) {
-        setElapsed(TOTAL_DURATION);
+      const endAt = focused ? focusDuration : TOTAL_DURATION;
+      if (now >= endAt) {
+        setElapsed(endAt);
         setIsFinished(true);
         return;
       }
@@ -353,15 +390,20 @@ function PlayingView({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [introDone, isPlaying, isFinished]);
+  }, [introDone, isPlaying, isFinished, focused, focusDuration]);
 
-  const currentBarIndex = Math.min(Math.floor(elapsed / BAR_DURATION), TOTAL_BARS - 1);
-  const progressInBar = (elapsed % BAR_DURATION) / BAR_DURATION;
+  const playClock = focused ? elapsed % PHRASE_DURATION : elapsed;
+  const focusLoopRound = focused
+    ? Math.min(Math.floor(elapsed / PHRASE_DURATION) + 1, FOCUS_LOOPS)
+    : 0;
+  const currentBarIndex = focused
+    ? phraseStart + Math.min(Math.floor(playClock / BAR_DURATION), phraseBars - 1)
+    : Math.min(Math.floor(elapsed / BAR_DURATION), TOTAL_BARS - 1);
+  const progressInBar = (playClock % BAR_DURATION) / BAR_DURATION;
 
-  const currentWindowIndex = Math.min(
-    Math.floor(elapsed / WINDOW_DURATION),
-    TOTAL_WINDOWS - 1,
-  );
+  const currentWindowIndex = focused
+    ? Math.min(Math.floor(currentBarIndex / ANALYSIS_WINDOW_BARS), TOTAL_WINDOWS - 1)
+    : Math.min(Math.floor(elapsed / WINDOW_DURATION), TOTAL_WINDOWS - 1);
 
   const currentMarks = useMemo(
     () => currentMarksUpToWindow(currentWindowIndex),
@@ -389,7 +431,7 @@ function PlayingView({
     <div className="min-h-screen bg-background">
       <AppHeader
         onBack={
-          isFinished
+          isFinished || focused
             ? onExit
             : () => {
                 setIsPlaying(false);
@@ -397,19 +439,25 @@ function PlayingView({
               }
         }
         title={
-          <>
-            {SONG.title}
-            {isEnsemble && (
-              <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">
-                협주 · {recording.playerName}
-              </span>
-            )}
-          </>
+          focused ? (
+            <>마디 {focusBar + 1} 집중 반복</>
+          ) : (
+            <>
+              {SONG.title}
+              {isEnsemble && (
+                <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">
+                  협주 · {recording.playerName}
+                </span>
+              )}
+            </>
+          )
         }
         right={
           <>
             <p className="tabular text-sm font-semibold">
-              마디 {Math.min(currentBarIndex + 1, TOTAL_BARS)}/{TOTAL_BARS}
+              {focused
+                ? `반복 ${focusLoopRound}/${FOCUS_LOOPS}회`
+                : `마디 ${Math.min(currentBarIndex + 1, TOTAL_BARS)}/${TOTAL_BARS}`}
             </p>
             {introDone && !isFinished && isPlaying && (
               <Button size="sm" variant="outline" onClick={() => setIsPlaying(false)}>
@@ -454,38 +502,66 @@ function PlayingView({
               isFinished={isFinished}
               introActive={!introDone}
               onIntroDone={handleIntroDone}
+              focusBar={focusBar}
             />
           </div>
         </div>
 
-        {/* 피드백 — 좌: 지난 연주 / 우: 현재. 50:50 고정(동적 X). 없으면 '없음'을 명시. */}
-        <section className="flex items-stretch gap-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <PreviousCaution key={`caution-${currentWindowIndex}`} cautions={previousCautions} />
-            <FeedbackCaption tone="previous" />
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <CurrentFeedback feedbacks={currentFeedbacks} barIndex={currentWindowIndex} />
-            <FeedbackCaption tone="current" />
-          </div>
-        </section>
+        {/* 일반 연주: 좌(지난)/우(현재) 피드백. 집중 반복 모드에선 피드백 대신 짧은 가이드. */}
+        {focused ? (
+          <Card>
+            <CardContent className="p-5 text-center">
+              <p className="text-sm font-semibold">
+                자주 흔들렸던 마디 {focusBar + 1}이에요. 천천히, 정확하게 반복해보세요.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <section className="flex items-stretch gap-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <PreviousCaution key={`caution-${currentWindowIndex}`} cautions={previousCautions} />
+              <FeedbackCaption tone="previous" />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <CurrentFeedback feedbacks={currentFeedbacks} barIndex={currentWindowIndex} />
+              <FeedbackCaption tone="current" />
+            </div>
+          </section>
+        )}
 
         {isFinished && (
           <Card>
             <CardContent className="flex items-center justify-between p-5">
               <div>
-                <p className="text-lg font-bold">연주가 끝났습니다</p>
+                <p className="text-lg font-bold">
+                  {focused ? '집중 연습을 마쳤어요' : '연주가 끝났습니다'}
+                </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  이번 연주가 보관함에 자동 저장되었습니다 결과를 확인해주세요
+                  {focused
+                    ? '이 구간을 충분히 반복했어요. 수고했어요!'
+                    : '이번 연주가 보관함에 자동 저장되었습니다 결과를 확인해주세요'}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <Button size="lg" variant="outline" onClick={onExit}>
-                  홈으로
-                </Button>
-                <Button size="lg" onClick={onFinish}>
-                  결과 보기
-                </Button>
+                {focused ? (
+                  <>
+                    <Button size="lg" variant="outline" onClick={onExit}>
+                      돌아가기
+                    </Button>
+                    <Button size="lg" onClick={restartFocus}>
+                      다시 한 번
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="lg" variant="outline" onClick={onExit}>
+                      홈으로
+                    </Button>
+                    <Button size="lg" onClick={onFinish}>
+                      결과 보기
+                    </Button>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -638,6 +714,7 @@ function SheetStage({
   isFinished,
   introActive,
   onIntroDone,
+  focusBar,
 }: {
   currentBarIndex: number;
   progressInBar: number;
@@ -646,7 +723,38 @@ function SheetStage({
   isFinished: boolean;
   introActive: boolean;
   onIntroDone: () => void;
+  focusBar: number | null;
 }) {
+  // 집중 모드 — 틀린 그 한 마디만 크게 보여준다.
+  if (focusBar != null) {
+    return (
+      <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <p className="text-sm font-bold">악보</p>
+          <p className="text-xs font-semibold text-muted-foreground">마디 {focusBar + 1}</p>
+        </div>
+        <div className="flex flex-1 items-center justify-center px-5 py-6">
+          <div className="flex w-full max-w-[300px] items-start gap-3">
+            <LaneGutter staffSpacerClassName="h-28" />
+            <div className="min-w-0 flex-1">
+              <BarView
+                barIndex={focusBar}
+                notes={SONG.bars[focusBar]}
+                isCurrent={!isFinished}
+                progress={isFinished ? 0 : progressInBar}
+                previousMarks={previousMarks.get(focusBar) ?? []}
+                currentMarks={currentMarks.get(focusBar) ?? []}
+                lyrics={LYRICS[focusBar]}
+                staffClassName="h-28"
+              />
+            </div>
+          </div>
+        </div>
+        {introActive && <CountInOverlay onDone={onIntroDone} />}
+      </div>
+    );
+  }
+
   // 4마디 × 1줄 = 4마디/페이지. 한 줄에 마디를 적게 둬 음표를 키운다.
   const BARS_PER_ROW = 4;
   const ROWS_PER_PAGE = 1;
