@@ -13,9 +13,9 @@ import {
   marksFromSummary,
   marksFromBarFails,
   previousMarksByBar,
-  type Area,
   type Mark,
 } from '@/data/session';
+import { AREA_KO, AREA_TEXT, AREA_DOT } from '@/lib/area';
 import { getRecording } from '@/data/recordings';
 import { usePlaySession } from '@/store/usePlaySession';
 
@@ -26,17 +26,6 @@ const ROWS_PER_PAGE = 2; // 두 줄 = 한 페이지
 const TOTAL_ROWS = Math.ceil(SONG.bars.length / BARS_PER_ROW);
 const RESULT_PAGES = Math.ceil(TOTAL_ROWS / ROWS_PER_PAGE);
 
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_DOT: Record<Area, string> = {
-  pitch: 'bg-pitch',
-  rhythm: 'bg-rhythm',
-  posture: 'bg-posture',
-};
-const AREA_TEXT: Record<Area, string> = {
-  pitch: 'text-pitch',
-  rhythm: 'text-rhythm',
-  posture: 'text-posture',
-};
 
 export default function ResultPage() {
   const navigate = useNavigate();

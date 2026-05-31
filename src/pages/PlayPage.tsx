@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { BarView, LaneGutter } from '@/components/sheet/BarView';
-import { CheckIcon, HistoryIcon, PitchIcon, RhythmIcon, UserIcon } from '@/components/icons';
+import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import { LYRICS, SONG } from '@/data/song';
 import {
@@ -13,11 +13,11 @@ import {
   currentMarksUpToWindow,
   previousCautionsForWindow,
   previousMarksByBar,
-  type Area,
   type Caution,
   type Feedback,
   type Mark,
 } from '@/data/session';
+import { type Area, AREA_KO, AREA_DOT, AREA_ICON, AREA_BG_LIGHT } from '@/lib/area';
 import { scheduleMetronome, scheduleSong, scheduleBarsLoop } from '@/lib/audio';
 import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
 import { getRecording, formatDuration, type Recording } from '@/data/recordings';
@@ -445,7 +445,7 @@ function PlayingView({
             <>
               {SONG.title}
               {isEnsemble && (
-                <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">
+                <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] text-background">
                   협주 · {recording.playerName}
                 </span>
               )}
@@ -480,14 +480,8 @@ function PlayingView({
           <div className="lg:col-span-2">
             {recording && mode === 'ensemble' ? (
               // 협주: 내 카메라 | 상대 영상을 좌우 이분할 (위아래 스택 대신, 솔로와 같은 높이 유지)
-              <div className="grid h-full grid-cols-2 gap-3">
-                <CameraStage stream={stream} alertPosture={isPostureAlert} duet />
-                <PartnerStage
-                  recording={recording}
-                  progress={elapsed / TOTAL_DURATION}
-                  playing={isPlaying && !isFinished && introDone}
-                  duet
-                />
+              <div className="h-full">
+                <CameraStage stream={stream} alertPosture={isPostureAlert}/>
               </div>
             ) : (
               <CameraStage stream={stream} alertPosture={isPostureAlert} />
@@ -654,56 +648,6 @@ function CameraStage({
 }
 
 /* ──────────────────────────────────────────────────────────────── */
-/* 협주 상대 — 선택한 녹음을 함께 재생(듀엣). 실제 미디어 없이 placeholder. */
-
-function PartnerStage({
-  recording,
-  progress,
-  playing,
-  duet = false,
-}: {
-  recording: Recording;
-  progress: number;
-  playing: boolean;
-  /** 협주 좌우 이분할 모드 — 컬럼 높이를 채우고 푸터를 숨긴다. */
-  duet?: boolean;
-}) {
-  const pct = Math.min(Math.max(progress, 0), 1) * 100;
-  return (
-    <div className={`flex flex-col overflow-hidden rounded-2xl border-2 border-border bg-card shadow-card ${duet ? 'h-full' : ''}`}>
-      <div className={`relative bg-foreground ${duet ? 'min-h-0 flex-1' : 'aspect-video'}`}>
-        {/* placeholder: 녹화 영상 자리 */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <p className="text-sm font-semibold text-background/80">{recording.playerName} 님의 녹화</p>
-        </div>
-        <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-foreground/55 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
-          <span className={`h-1.5 w-1.5 rounded-full ${playing ? 'bg-posture' : 'bg-gray-400'}`} />
-          REC 재생
-        </div>
-        <div className="absolute right-3 top-3 rounded-full bg-foreground/55 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
-          {recording.playerName}
-        </div>
-        {/* 재생 진행바 (내 연주와 동기화) */}
-        <div className="absolute inset-x-0 bottom-0 h-1 bg-background/20">
-          <div
-            className="h-full bg-background transition-[width] duration-100 ease-linear"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
-      {!duet && (
-        <div className="flex items-center justify-between px-5 py-3">
-          <p className="text-sm font-bold">{recording.playerName}</p>
-          <p className="tabular text-xs text-muted-foreground">
-            {recording.songTitle} · {formatDuration(recording.durationSec)}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────── */
 /* 메인 악보 카드 */
 
 function SheetStage({
@@ -824,29 +768,14 @@ function SheetStage({
 
 /* ──────────────────────────────────────────────────────────────── */
 
-const AREA_BG_LIGHT: Record<Area, string> = {
-  pitch: 'bg-pitch/10',
-  rhythm: 'bg-rhythm/10',
-  posture: 'bg-posture/10',
-};
-const AREA_SOLID: Record<Area, string> = {
-  pitch: 'bg-pitch',
-  rhythm: 'bg-rhythm',
-  posture: 'bg-posture',
-};
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_ICON: Record<Area, (p: { className?: string }) => JSX.Element> = {
-  pitch: PitchIcon,
-  rhythm: RhythmIcon,
-  posture: UserIcon,
-};
+
 
 /** 영역 배지 — 아이콘 + 영역 이름 (음정/박자/자세) */
 function AreaBadge({ area }: { area: Area }) {
   const Icon = AREA_ICON[area];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${AREA_SOLID[area]}`}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${AREA_DOT[area]}`}
     >
       <Icon className="h-3.5 w-3.5" />
       {AREA_KO[area]}

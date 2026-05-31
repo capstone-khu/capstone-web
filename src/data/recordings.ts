@@ -5,7 +5,7 @@
  * - owner: 'me'    → 내 연주 이력 (마이페이지)
  * 실제 미디어 파일은 없으므로 협주 시 상대 영상은 placeholder로 표현한다.
  */
-import type { Area } from '@/data/session';
+import { type Area } from '@/lib/area';
 
 export type RecordingSummary = Record<Area, number>;
 

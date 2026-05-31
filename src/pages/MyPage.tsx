@@ -2,18 +2,13 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { MY_RECORDINGS, REPEAT_WEAK, type RecordingSummary } from '@/data/recordings';
-import type { Area } from '@/data/session';
+import { type Area, AREA_KO, AREA_PILL } from '@/lib/area';
 import { ChevronLeftIcon } from '@/components/icons';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import { AppHeader } from '@/components/AppHeader';
 
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_PILL: Record<Area, string> = {
-  pitch: 'bg-pitch/10 text-pitch',
-  rhythm: 'bg-rhythm/10 text-rhythm',
-  posture: 'bg-posture/10 text-posture',
-};
+
 
 const AREAS: Area[] = ['pitch', 'rhythm', 'posture'];
 

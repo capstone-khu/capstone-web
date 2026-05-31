@@ -126,4 +126,14 @@ export const SONG_LIST: SongMeta[] = [
     bars: SONG.bars.length,
     status: 'available',
   },
+  {
+    id: 'airplane',
+    title: "떴다 떴다 비행기",
+    composer: SONG.composer,
+    instrument: SONG.instrument,
+    key: SONG.key,
+    bpm: SONG.bpm,
+    bars: SONG.bars.length,
+    status: 'coming-soon',
+  },
 ];
