@@ -76,3 +76,21 @@ export function CloseIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** 재생 — 삼각형 */
+export function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  );
+}
+
+/** 일시정지 — 두 막대 */
+export function PauseIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M7 5h3v14H7zM14 5h3v14h-3z" />
+    </svg>
+  );
+}
