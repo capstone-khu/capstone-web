@@ -10,8 +10,8 @@ interface AuthState {
   accessToken: string | null;
 
   setAuth: (
-    user: User,
-    token: string,
+    user: User | null,
+    token: string | null,
   ) => void;
 
   logout: () => void;
@@ -27,9 +27,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: token,
     }),
 
-  logout: () =>
+  logout: () => {
+    localStorage.removeItem('access_token');
     set({
       user: null,
       accessToken: null,
-    }),
+    });
+  }
 }));

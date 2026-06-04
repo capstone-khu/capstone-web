@@ -1,11 +1,11 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/store/useAuthStore';
-import { loginApi } from '@/api/auth';
+import { login } from '@/api/auth';
 
 const schema = z.object({
   name: z.string().min(1, '이름을 입력해주세요'),
@@ -15,8 +15,6 @@ type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
 
   const {
     register,
@@ -32,8 +30,10 @@ export default function LoginPage() {
   const onSubmit = async (a: FormValues) => {
     try {
       // api로 데이터 받아오기 
-      const result = await loginApi(a);
+      const result = await login(a);
       const { user, access_token } = result.data;
+      // JWT 토큰을 localStorage에 저장
+      localStorage.setItem('access_token', access_token);
 
       // useAuthStore 업데이트
       setAuth(user, access_token);
