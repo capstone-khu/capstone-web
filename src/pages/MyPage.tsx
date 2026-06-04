@@ -11,7 +11,7 @@ import {
   type RecordingSummary,
   type Recording,
 } from '@/data/recordings';
-import type { Area } from '@/data/session';
+import { type Area, AREA_PILL, AREA_KO } from '@/lib/area';
 import { ChevronLeftIcon, PlayIcon, PauseIcon } from '@/components/icons';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
