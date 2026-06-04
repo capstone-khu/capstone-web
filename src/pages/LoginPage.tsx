@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/store/useAuthStore';
+import { loginApi } from '@/api/auth';
 
 const schema = z.object({
   name: z.string().min(1, '이름을 입력해주세요'),
@@ -15,7 +16,6 @@ type FormValues = z.infer<typeof schema>;
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const login = useAuthStore((s) => s.login);
   const from = (location.state as { from?: string } | null)?.from ?? '/';
 
   const {
@@ -27,10 +27,26 @@ export default function LoginPage() {
     defaultValues: { name: '', password: '' },
   });
 
-  const onSubmit = (values: FormValues) => {
-    // 목업: 실제 인증 없이 이름만으로 로그인 상태를 만든다.
-    login(values.name);
-    navigate(from, { replace: true });
+  const setAuth = useAuthStore((state) => state.setAuth);
+
+  const onSubmit = async (data: FormValues) => {
+    try {
+      // api로 데이터 받아오기 
+      const result = await loginApi(data);
+      const { user, accessToken } = result;
+
+      console.log(result);
+      // useAuthStore 업데이트
+      setAuth(user, accessToken);
+
+      navigate(from, {
+        replace: true,
+      });
+    } catch (error) {
+      console.error(error);
+
+      alert('로그인 실패');
+    }
   };
 
   return (
@@ -48,7 +64,7 @@ export default function LoginPage() {
                 <input
                   type="text"
                   autoComplete="username"
-                  placeholder="홍길동"
+                  placeholder="이름을 입력하세요"
                   className={inputCls(!!errors.name)}
                   {...register('name')}
                 />
@@ -58,7 +74,7 @@ export default function LoginPage() {
                 <input
                   type="password"
                   autoComplete="current-password"
-                  placeholder="••••••••"
+                  placeholder="비밀번호를 입력하세요"
                   className={inputCls(!!errors.password)}
                   {...register('password')}
                 />
@@ -71,9 +87,6 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-muted-foreground">
-          화면 기획용 목업 — 아무 이름·비밀번호로 로그인됩니다
-        </p>
       </div>
     </div>
   );
@@ -97,7 +110,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <label className="text-sm font-semibold">{label}</label>
       {children}
       {error && <p className="text-xs font-medium text-destructive">{error}</p>}
