@@ -60,7 +60,7 @@ export function BarView({
             const isActive = isCurrent && i === activeNote;
 
             const noteColor = isActive
-              ? '#c6cbd3'
+              ? '#ffda03'
               : 'hsl(var(--foreground))';
 
             return (

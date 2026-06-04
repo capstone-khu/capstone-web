@@ -29,15 +29,15 @@ export default function HomePage() {
   // SongData = {id: string, title: string }
   const song_list = songList;
 
-  const onSolo = () => {
+  const onSolo = (id: string) => {
     startSolo();
-    navigate('/play');
+    navigate(`/play/${id}`);
   };
 
   // 협주: 고른 곡을 협주 선택 화면까지 들고 가 맥락을 유지한다.
-  const onEnsemble = () => {
+  const onEnsemble = (id: string) => {
     if (!selected) return;
-    navigate('/ensemble', { state: { songId: selected.id, songTitle: selected.title } });
+    navigate(`/ensemble/${id}`, { state: { songId: selected.id, songTitle: selected.title } });
   };
 
   // 곡이 충분히 많을 때만 검색 노출 (MVP는 1곡이라 숨김 — 동작 안 하는 입력 방지)
@@ -108,10 +108,10 @@ export default function HomePage() {
         description="어떻게 연주할까요?"
       >
         <div className="space-y-3 p-6 pt-4">
-          <Button size="xl" className="w-full" onClick={onSolo}>
+          <Button size="xl" className="w-full" onClick={() => selected && onSolo(selected.id)}>
             혼자 연주
           </Button>
-          <Button size="xl" variant="outline" className="w-full" onClick={onEnsemble}>
+          <Button size="xl" variant="outline" className="w-full" onClick={() => selected && onEnsemble(selected.id)}>
             협주하기
           </Button>
           <p className="pt-1 text-center text-xs text-muted-foreground">
