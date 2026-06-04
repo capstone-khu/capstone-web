@@ -20,7 +20,7 @@ import {
 import { type Area, AREA_KO, AREA_DOT, AREA_ICON, AREA_BG_LIGHT } from '@/lib/area';
 import { scheduleMetronome, scheduleSong, scheduleBarsLoop } from '@/lib/audio';
 import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
-import { getRecording, formatDuration, type Recording } from '@/data/recordings';
+import { getRecording, type Recording } from '@/data/recordings';
 
 const BAR_DURATION = (60 / SONG.bpm) * SONG.beatsPerBar;
 const WINDOW_DURATION = BAR_DURATION * ANALYSIS_WINDOW_BARS;
@@ -35,7 +35,10 @@ export default function PlayPage() {
   const mode = usePlaySession((s) => s.mode);
   const recordingId = usePlaySession((s) => s.recordingId);
   const skipPermission = usePlaySession((s) => s.skipPermission);
-  const focusBar = usePlaySession((s) => s.focusBar);
+  const focusBars = usePlaySession((s) => s.focusBars);
+  const [focusIdx, setFocusIdx] = useState(0);
+  const isFocus = focusBars.length > 0;
+  const activeFocusBar = isFocus ? (focusBars[focusIdx] ?? 0) : null;
   const recording = getRecording(recordingId);
 
   const [stage, setStage] = useState<Stage>('permission');
@@ -101,10 +104,14 @@ export default function PlayPage() {
 
   return (
     <PlayingView
+      key={`play-${activeFocusBar ?? 'normal'}`}
       stream={stream}
       mode={mode}
       recording={recording}
-      focusBar={focusBar}
+      focusBar={activeFocusBar}
+      focusBars={focusBars}
+      focusIdx={focusIdx}
+      onSelectFocusIdx={setFocusIdx}
       onFinish={handleFinish}
       onExit={handleExit}
     />
@@ -300,6 +307,9 @@ function PlayingView({
   mode,
   recording,
   focusBar,
+  focusBars,
+  focusIdx,
+  onSelectFocusIdx,
   onFinish,
   onExit,
 }: {
@@ -307,6 +317,9 @@ function PlayingView({
   mode: PlayMode;
   recording: Recording | null;
   focusBar: number | null;
+  focusBars: number[];
+  focusIdx: number;
+  onSelectFocusIdx: (idx: number) => void;
   onFinish: () => void;
   onExit: () => void;
 }) {
@@ -475,16 +488,37 @@ function PlayingView({
       />
 
       <main className="container max-w-7xl space-y-4 py-6">
+        {/* 약점 마디가 여러 개면 마디 탭으로 전환 (탭 선택 시 그 마디로 카운트인부터 재시작) */}
+        {focusBars.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            {focusBars.map((b, i) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => onSelectFocusIdx(i)}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-bold transition-colors ${
+                  i === focusIdx
+                    ? 'bg-foreground text-background'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                }`}
+              >
+                마디 {b + 1}
+              </button>
+            ))}
+          </div>
+        )}
         {/* 좌: 영상 2 / 우: 악보 3 비율 — 같은 행, 동일 높이로 stretch */}
         <div className="grid items-stretch gap-4 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            {recording && mode === 'ensemble' ? (
-              // 협주: 내 카메라 | 상대 영상을 좌우 이분할 (위아래 스택 대신, 솔로와 같은 높이 유지)
-              <div className="h-full">
-                <CameraStage stream={stream} alertPosture={isPostureAlert}/>
-              </div>
-            ) : (
-              <CameraStage stream={stream} alertPosture={isPostureAlert} />
+            {/* 협주여도 상대 녹화 영상은 띄우지 않는다 — 내 카메라만 보이고 상대는 음원만 재생.
+                (연주 종료 후 좌우 합성 '협주 영상'으로 만들어져 마이페이지에서 열람) */}
+            <CameraStage stream={stream} alertPosture={isPostureAlert} />
+            {isEnsemble && (
+              <PartnerAudioBar
+                name={recording.playerName}
+                progress={elapsed / TOTAL_DURATION}
+                playing={isPlaying && !isFinished && introDone}
+              />
             )}
           </div>
           <div className="lg:col-span-3">
@@ -533,7 +567,9 @@ function PlayingView({
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {focused
                     ? '이 구간을 충분히 반복했어요. 수고했어요!'
-                    : '이번 연주가 보관함에 자동 저장되었습니다 결과를 확인해주세요'}
+                    : isEnsemble
+                      ? '협주 영상이 만들어졌어요. 마이페이지에서 다시 볼 수 있어요.'
+                      : '이번 연주가 보관함에 자동 저장되었습니다 결과를 확인해주세요'}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
@@ -542,9 +578,15 @@ function PlayingView({
                     <Button size="lg" variant="outline" onClick={onExit}>
                       돌아가기
                     </Button>
-                    <Button size="lg" onClick={restartFocus}>
-                      다시 한 번
-                    </Button>
+                    {focusIdx < focusBars.length - 1 ? (
+                      <Button size="lg" onClick={() => onSelectFocusIdx(focusIdx + 1)}>
+                        다음 마디 (마디 {focusBars[focusIdx + 1] + 1})
+                      </Button>
+                    ) : (
+                      <Button size="lg" onClick={restartFocus}>
+                        다시 한 번
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -643,6 +685,36 @@ function CameraStage({
           <p className="text-xs text-muted-foreground">좋은 연주는 바른 자세에서 시작돼요</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────── */
+/* 협주 상대 음원 — 상대 녹화 영상은 띄우지 않고(연주 종료 후 좌우 합성 협주 영상으로),
+   음원 재생 상태와 진행만 표시한다. */
+
+function PartnerAudioBar({
+  name,
+  progress,
+  playing,
+}: {
+  name: string;
+  progress: number;
+  playing: boolean;
+}) {
+  const pct = Math.min(Math.max(progress, 0), 1) * 100;
+  return (
+    <div className="mt-3 rounded-2xl border-2 border-border bg-card p-4 shadow-card">
+      <div className="flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${playing ? 'bg-posture' : 'bg-gray-400'}`} />
+        <p className="text-sm font-bold">협주 · {name} 음원 재생 중</p>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full bg-foreground transition-[width] duration-100 ease-linear"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -819,10 +891,22 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
     );
   }
 
-  // 지적 1개 이상 — 영역별 블록을 한 카드에 쌓는다.
-  const issues = feedbacks.filter(
-    (fb): fb is Extract<Feedback, { tone: 'normal' }> => fb.tone === 'normal',
-  );
+  // 슈퍼바이저 코칭(폴백) — 영역색·영역 배지 없는 중립 카드.
+  if (feedbacks.length === 1 && feedbacks[0].tone === 'supervisor') {
+    return (
+      <div key={`fb-${barIndex}`} className={`${FEEDBACK_BASE} border border-border bg-muted/50`}>
+        <span className="inline-flex items-center gap-1 rounded-md bg-foreground/80 px-2 py-1 text-xs font-bold text-background">
+          코치
+        </span>
+        <p className="text-lg font-bold leading-snug tracking-tight">{feedbacks[0].message}</p>
+      </div>
+    );
+  }
+
+  // 지적 1개 이상 — 영역별 블록을 한 카드에 쌓는다. 더 막힌(reward 낮은) 영역을 먼저.
+  const issues = feedbacks
+    .filter((fb): fb is Extract<Feedback, { tone: 'normal' }> => fb.tone === 'normal')
+    .sort((a, b) => (a.reward ?? 0) - (b.reward ?? 0));
   const multi = issues.length > 1;
   // 다중이면 한 영역색으로 칠할 수 없으니 중립 카드, 단일이면 영역 틴트.
   const bg = multi ? 'border border-border bg-card shadow-soft' : AREA_BG_LIGHT[issues[0].area];

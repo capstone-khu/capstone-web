@@ -1,9 +1,18 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { MY_RECORDINGS, REPEAT_WEAK, type RecordingSummary } from '@/data/recordings';
-import { type Area, AREA_KO, AREA_PILL } from '@/lib/area';
-import { ChevronLeftIcon } from '@/components/icons';
+import { Modal } from '@/components/ui/modal';
+import {
+  MY_RECORDINGS,
+  REPEAT_WEAK_BARS,
+  formatDuration,
+  type RepeatWeak,
+  type RecordingSummary,
+  type Recording,
+} from '@/data/recordings';
+import type { Area } from '@/data/session';
+import { ChevronLeftIcon, PlayIcon, PauseIcon } from '@/components/icons';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import { AppHeader } from '@/components/AppHeader';
@@ -29,23 +38,25 @@ function AreaStatGrid({ summary }: { summary: RecordingSummary }) {
   );
 }
 
-/** 세션 간 반복 실패 마디 → 집중 반복 레슨 추천 배너 */
-function RepeatBarCoach({
-  bar,
-  lessons,
-  onStart,
-}: {
-  bar: number;
-  lessons: number;
-  onStart: () => void;
-}) {
+/** 세션 간 반복 실패 마디(들) → 집중 반복 레슨 추천 배너 */
+function RepeatBarCoach({ weak, onStart }: { weak: RepeatWeak[]; onStart: () => void }) {
+  const barLabels = weak.map((w) => `마디 ${w.bar + 1}`).join(', ');
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm leading-relaxed">
-          <span className="font-bold">마디 {bar + 1}</span>을 최근{' '}
-          <span className="font-bold">{lessons}번</span> 레슨에서 놓쳤어요. 이 마디만 집중해서 반복
-          연습해볼까요?
+          {weak.length === 1 ? (
+            <>
+              <span className="font-bold">{barLabels}</span>을 최근{' '}
+              <span className="font-bold">{weak[0].lessons}번</span> 레슨에서 놓쳤어요. 이 마디만
+              집중해서 반복 연습해볼까요?
+            </>
+          ) : (
+            <>
+              <span className="font-bold">{barLabels}</span>를 최근 자주 놓쳤어요. 이 마디들을 집중해서
+              반복 연습해볼까요?
+            </>
+          )}
         </p>
         <Button size="sm" className="shrink-0" onClick={onStart}>
           집중 반복 레슨
@@ -55,18 +66,99 @@ function RepeatBarCoach({
   );
 }
 
+/** 협주 영상 플레이어(mock) — 좌우 분할 화면 + 재생/일시정지·진행바. 실제 미디어 없이 진행만 흉내. */
+function EnsembleVideoPlayer({ rec }: { rec: Recording }) {
+  const partner = rec.ensemble?.partnerName ?? '';
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0); // 0..1
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = window.setInterval(() => {
+      setProgress((p) => {
+        const next = p + 0.25 / rec.durationSec;
+        if (next >= 1) {
+          setPlaying(false);
+          return 1;
+        }
+        return next;
+      });
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [playing, rec.durationSec]);
+
+  const toggle = () => {
+    if (progress >= 1) setProgress(0);
+    setPlaying((v) => !v);
+  };
+
+  return (
+    <div className="space-y-3 p-5">
+      <div className="relative overflow-hidden rounded-xl bg-foreground">
+        <div className="grid aspect-video grid-cols-2 divide-x divide-background/20">
+          <div className="flex items-center justify-center text-sm font-semibold text-background/70">
+            나
+          </div>
+          <div className="flex items-center justify-center text-sm font-semibold text-background/70">
+            {partner}
+          </div>
+        </div>
+        <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-background/20 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
+          협주 · {partner}
+        </div>
+      </div>
+
+      {/* 컨트롤 바 */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? '일시정지' : '재생'}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background"
+        >
+          {playing ? (
+            <PauseIcon className="h-4 w-4" />
+          ) : (
+            <PlayIcon className="h-4 w-4 translate-x-0.5" />
+          )}
+        </button>
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-foreground transition-[width] duration-200 ease-linear"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+        <span className="tabular shrink-0 text-xs text-muted-foreground">
+          {formatDuration(Math.round(progress * rec.durationSec))} / {formatDuration(rec.durationSec)}
+        </span>
+      </div>
+
+      <p className="text-center text-xs text-muted-foreground">
+        {rec.songTitle} · 협주 영상 (좌: 나 / 우: {partner})
+      </p>
+    </div>
+  );
+}
+
 export default function MyPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const startSolo = usePlaySession((s) => s.startSolo);
   const startFocus = usePlaySession((s) => s.startFocus);
+  const weak = REPEAT_WEAK_BARS;
+  const [videoRec, setVideoRec] = useState<Recording | null>(null);
+  const [page, setPage] = useState(0);
 
-  const startFocusLesson = (bar: number) => {
-    startFocus(bar);
+  const PAGE_SIZE = 3;
+  const pageCount = Math.ceil(MY_RECORDINGS.length / PAGE_SIZE);
+  const pagedRecords = MY_RECORDINGS.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+  const startFocusLesson = () => {
+    if (weak.length === 0) return;
+    startFocus(weak.map((w) => w.bar));
     navigate('/play');
   };
-  const repeat = REPEAT_WEAK;
 
   const handleLogout = () => {
     logout();
@@ -82,45 +174,43 @@ export default function MyPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader title="마이페이지" onBack={() => navigate('/')} />
-
-      <main className="container max-w-2xl space-y-6 py-6">
-        {/* 프로필 */}
-        <Card>
-          <CardContent className="flex items-center justify-between gap-4 p-5">
-            <p className="min-w-0 flex-1 truncate text-lg font-bold">
-              {user?.name ?? '게스트'} 님
-            </p>
+      <AppHeader
+        title="마이페이지"
+        onBack={() => navigate('/')}
+        right={
+          <>
+            <span className="hidden text-sm font-semibold sm:inline">{user?.name ?? '게스트'} 님</span>
             <Button size="sm" variant="outline" onClick={handleLogout}>
               로그아웃
             </Button>
-          </CardContent>
-        </Card>
+          </>
+        }
+      />
 
+      <main className="container max-w-2xl space-y-6 py-6">
         {/* 연주 이력 */}
         <section className="space-y-3">
-          {repeat && (
-            <RepeatBarCoach
-              bar={repeat.bar}
-              lessons={repeat.lessons}
-              onStart={() => startFocusLesson(repeat.bar)}
-            />
-          )}
-          <ul className="space-y-2.5">
-            {MY_RECORDINGS.map((rec) => (
+          {weak.length > 0 && <RepeatBarCoach weak={weak} onStart={startFocusLesson} />}
+          <ul key={page} className="animate-page-in space-y-2.5">
+            {pagedRecords.map((rec) => (
               <li key={rec.id}>
-                <button
-                  type="button"
-                  onClick={() => viewResult(rec.id)}
-                  className="block w-full text-left transition-transform active:scale-[0.99]"
-                >
-                  <Card className="transition-colors hover:bg-gray-50">
-                    <CardContent className="space-y-3 p-4">
+                <Card className="transition-colors hover:bg-gray-50">
+                  <CardContent className="space-y-3 p-4">
+                    <button
+                      type="button"
+                      onClick={() => viewResult(rec.id)}
+                      className="block w-full space-y-3 text-left transition-transform active:scale-[0.99]"
+                    >
                       {/* 곡명 · 날짜 (좌) · 영역별 피드백 확인하기 (우) */}
                       <div className="flex items-baseline justify-between gap-2">
                         <p className="truncate text-base font-bold">
                           {rec.songTitle}{' '}
                           <span className="font-medium text-muted-foreground">· {rec.date}</span>
+                          {rec.ensemble && (
+                            <span className="ml-2 whitespace-nowrap rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">
+                              협주 · {rec.ensemble.partnerName}
+                            </span>
+                          )}
                         </p>
                         <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-foreground">
                           영역별 피드백 확인하기
@@ -129,14 +219,62 @@ export default function MyPage() {
                       </div>
 
                       <AreaStatGrid summary={rec.summary} />
-                    </CardContent>
-                  </Card>
-                </button>
+                    </button>
+                    {rec.ensemble && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setVideoRec(rec)}
+                      >
+                        협주 영상 보기
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
               </li>
             ))}
           </ul>
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                이전
+              </Button>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: pageCount }).map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-label={`${i + 1}페이지`}
+                    onClick={() => setPage(i)}
+                    className={`h-2 w-2 rounded-full transition-colors ${
+                      i === page ? 'bg-foreground' : 'bg-gray-300'
+                    }`}
+                  />
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={page === pageCount - 1}
+                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              >
+                다음
+              </Button>
+            </div>
+          )}
         </section>
       </main>
+
+      <Modal open={!!videoRec} onClose={() => setVideoRec(null)} title="협주 영상">
+        {videoRec && <EnsembleVideoPlayer key={videoRec.id} rec={videoRec} />}
+      </Modal>
     </div>
   );
 }

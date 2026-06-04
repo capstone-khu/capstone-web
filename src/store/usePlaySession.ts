@@ -10,26 +10,27 @@ type PlaySessionState = {
   mode: PlayMode;
   recordingId: string | null;
   skipPermission: boolean;
-  /** 집중 반복 레슨 대상 마디(0-based). null이면 일반 연주 */
-  focusBar: number | null;
+  /** 집중 반복 레슨 대상 마디(0-based) 목록. 비어 있으면 일반 연주. 여러 개면 마디 탭으로 전환. */
+  focusBars: number[];
   /** 혼자 연주 시작 */
   startSolo: () => void;
   /** 선택한 녹음과 함께 협주 시작 */
   startEnsemble: (recordingId: string) => void;
   /** 같은 설정으로 다시 연주 — 권한 화면만 건너뜀 */
   replay: () => void;
-  /** 특정 마디 집중 반복 레슨 시작 (마이페이지 등에서) */
-  startFocus: (bar: number) => void;
+  /** 약점 마디(들) 집중 반복 레슨 시작 (마이페이지 등에서) */
+  startFocus: (bars: number[]) => void;
 };
 
 export const usePlaySession = create<PlaySessionState>((set) => ({
   mode: 'solo',
   recordingId: null,
   skipPermission: false,
-  focusBar: null,
-  startSolo: () => set({ mode: 'solo', recordingId: null, skipPermission: false, focusBar: null }),
+  focusBars: [],
+  startSolo: () => set({ mode: 'solo', recordingId: null, skipPermission: false, focusBars: [] }),
   startEnsemble: (recordingId) =>
-    set({ mode: 'ensemble', recordingId, skipPermission: false, focusBar: null }),
+    set({ mode: 'ensemble', recordingId, skipPermission: false, focusBars: [] }),
   replay: () => set({ skipPermission: true }),
-  startFocus: (bar) => set({ mode: 'solo', recordingId: null, skipPermission: true, focusBar: bar }),
+  startFocus: (bars) =>
+    set({ mode: 'solo', recordingId: null, skipPermission: true, focusBars: bars }),
 }));

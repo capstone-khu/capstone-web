@@ -25,33 +25,35 @@ export type Recording = {
   summary: RecordingSummary;
   /** 어느 마디에서 어떤 영역이 틀렸는지 (세션 간 반복 실패 탐지·결과 마킹용) */
   barFails?: BarFail[];
+  /** 협주 연주 기록이면 상대 정보 — 좌우 합성 '협주 영상'을 마이페이지에서 열람. */
+  ensemble?: { partnerName: string };
 };
 
 const TWINKLE = { songId: 'twinkle', songTitle: '반짝 반짝 작은별' };
 
 export const OTHER_RECORDINGS: Recording[] = [
   {
-    id: 'rec-seoyeon',
+    id: 'rec-sumin',
     ...TWINKLE,
-    playerName: '김서연',
+    playerName: '손수민',
     owner: 'other',
     date: '2일 전',
     durationSec: 72,
     summary: { pitch: 2, rhythm: 1, posture: 0 },
   },
   {
-    id: 'rec-doyun',
+    id: 'rec-suryeon',
     ...TWINKLE,
-    playerName: '이도윤',
+    playerName: '이수련',
     owner: 'other',
     date: '5일 전',
     durationSec: 74,
     summary: { pitch: 1, rhythm: 3, posture: 1 },
   },
   {
-    id: 'rec-jiwoo',
+    id: 'rec-jinyeong',
     ...TWINKLE,
-    playerName: '박지우',
+    playerName: '최진영',
     owner: 'other',
     date: '1주 전',
     durationSec: 71,
@@ -61,6 +63,16 @@ export const OTHER_RECORDINGS: Recording[] = [
 
 export const MY_RECORDINGS: Recording[] = [
   {
+    id: 'rec-me-duet',
+    ...TWINKLE,
+    playerName: '나',
+    owner: 'me',
+    date: '오늘',
+    durationSec: 73,
+    summary: { pitch: 1, rhythm: 1, posture: 1 },
+    ensemble: { partnerName: '손수민' }, // 협주 기록 — 마이페이지에서 협주 영상 열람
+  },
+  {
     id: 'rec-me-1',
     ...TWINKLE,
     playerName: '나',
@@ -69,11 +81,11 @@ export const MY_RECORDINGS: Recording[] = [
     durationSec: 73,
     summary: { pitch: 2, rhythm: 2, posture: 1 },
     barFails: [
-      { bar: 0, area: 'pitch' }, // 마디 1 — 반복 실패
+      { bar: 4, area: 'rhythm' }, // 마디 5 — 세션 간 반복 실패(폴백: 다른 영역 정상)
+      { bar: 6, area: 'posture' }, // 마디 7 — 세션 간 반복 실패(폴백: 다른 영역 정상)
+      { bar: 0, area: 'pitch' },
       { bar: 8, area: 'pitch' },
-      { bar: 3, area: 'rhythm' },
       { bar: 12, area: 'rhythm' },
-      { bar: 5, area: 'posture' },
     ],
   },
   {
@@ -85,11 +97,10 @@ export const MY_RECORDINGS: Recording[] = [
     durationSec: 70,
     summary: { pitch: 3, rhythm: 1, posture: 2 },
     barFails: [
-      { bar: 0, area: 'pitch' }, // 마디 1 — 반복 실패
-      { bar: 6, area: 'pitch' },
+      { bar: 4, area: 'rhythm' }, // 마디 5 — 세션 간 반복 실패(폴백)
+      { bar: 6, area: 'posture' }, // 마디 7 — 세션 간 반복 실패(폴백)
+      { bar: 0, area: 'pitch' },
       { bar: 14, area: 'pitch' },
-      { bar: 9, area: 'rhythm' },
-      { bar: 5, area: 'posture' },
       { bar: 18, area: 'posture' },
     ],
   },
@@ -102,10 +113,9 @@ export const MY_RECORDINGS: Recording[] = [
     durationSec: 71,
     summary: { pitch: 2, rhythm: 1, posture: 1 },
     barFails: [
-      { bar: 0, area: 'pitch' }, // 마디 1 — 반복 실패
+      { bar: 4, area: 'rhythm' }, // 마디 5 — 세션 간 반복 실패(폴백)
+      { bar: 6, area: 'posture' }, // 마디 7 — 세션 간 반복 실패(폴백)
       { bar: 11, area: 'pitch' },
-      { bar: 4, area: 'rhythm' },
-      { bar: 7, area: 'posture' },
     ],
   },
 ];
@@ -113,10 +123,10 @@ export const MY_RECORDINGS: Recording[] = [
 export type RepeatWeak = { bar: number; area: Area; lessons: number };
 
 /**
- * 내 연주 이력에서 같은 마디가 여러 레슨에 걸쳐 실패한 경우를 찾는다.
- * 누적 3회 이상이면 마이페이지에서 '집중 반복 레슨'을 추천. (가장 많이 반복된 마디 1개)
+ * 내 연주 이력에서 같은 마디가 여러 레슨에 걸쳐 실패(세션 간 슈퍼바이저 폴백 반복)한 경우를 찾는다.
+ * 누적 3회 이상인 마디를 모두 반환. 마디 오름차순. (마이페이지에서 '집중 반복 레슨' 추천)
  */
-function computeRepeatWeak(records: Recording[]): RepeatWeak | null {
+function computeRepeatWeakBars(records: Recording[]): RepeatWeak[] {
   const counts = new Map<number, { area: Area; lessons: number }>();
   for (const r of records) {
     for (const f of r.barFails ?? []) {
@@ -125,16 +135,15 @@ function computeRepeatWeak(records: Recording[]): RepeatWeak | null {
       else counts.set(f.bar, { area: f.area, lessons: 1 });
     }
   }
-  let best: RepeatWeak | null = null;
+  const weak: RepeatWeak[] = [];
   for (const [bar, v] of counts) {
-    if (v.lessons >= 3 && (!best || v.lessons > best.lessons)) {
-      best = { bar, area: v.area, lessons: v.lessons };
-    }
+    if (v.lessons >= 3) weak.push({ bar, area: v.area, lessons: v.lessons });
   }
-  return best;
+  return weak.sort((a, b) => a.bar - b.bar);
 }
 
-export const REPEAT_WEAK: RepeatWeak | null = computeRepeatWeak(MY_RECORDINGS);
+/** 세션 간 누적 3회+ 실패한 약점 마디들 (마이페이지 집중 반복 레슨 추천) */
+export const REPEAT_WEAK_BARS: RepeatWeak[] = computeRepeatWeakBars(MY_RECORDINGS);
 
 const ALL = [...OTHER_RECORDINGS, ...MY_RECORDINGS];
 

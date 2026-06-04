@@ -9,8 +9,9 @@ export type Severity = 'mild' | 'major';
 export type Mark = { area: Area; severity: Severity; message?: string };
 
 export type Feedback =
-  | { tone: 'normal'; area: Area; message: string; mark?: Mark }
-  | { tone: 'positive'; message: string };
+  | { tone: 'normal'; area: Area; message: string; mark?: Mark; reward?: number }
+  | { tone: 'positive'; message: string }
+  | { tone: 'supervisor'; message: string };
 
 /** 분석 단위: 3마디 = 한 윈도우. 한 윈도우에 하나의 피드백/마킹이 적용됨. */
 export const ANALYSIS_WINDOW_BARS = 3;
@@ -60,51 +61,54 @@ export const FEEDBACK_SEQUENCE: (Feedback[] | null)[] = [
     },
   ],
 
-  // W5: 동시 2영역 — 박자(SA-08) + 자세(SA-12)
+  // W5: 동시 2영역 — 박자(SA-08) + 자세(SA-12). reward 낮은(더 막힌) 영역이 먼저 표시.
   [
     {
       tone: 'normal',
       area: 'rhythm',
       message: '템포가 빠릅니다. 속도를 늦추세요',
       mark: { area: 'rhythm', severity: 'major' },
+      reward: -0.6,
     },
     {
       tone: 'normal',
       area: 'posture',
       message: '왼손 손목을 펴세요',
       mark: { area: 'posture', severity: 'mild' },
+      reward: -0.3,
     },
   ],
 
-  // W6: 동시 3영역 — 음정(SA-01) + 박자(SA-07) + 자세(SA-15)
+  // W6: 동시 3영역 — reward로 정렬되어 자세(-0.7) → 음정(-0.4) → 박자(-0.2) 순으로 표시된다.
   [
     {
       tone: 'normal',
       area: 'pitch',
       message: '음정을 올리세요',
       mark: { area: 'pitch', severity: 'mild' },
+      reward: -0.4,
     },
     {
       tone: 'normal',
       area: 'rhythm',
       message: '박자보다 늦게 연주하고 있습니다. 박자를 맞추세요',
       mark: { area: 'rhythm', severity: 'mild' },
+      reward: -0.2,
     },
     {
       tone: 'normal',
       area: 'posture',
       message: '어깨를 내리세요',
       mark: { area: 'posture', severity: 'major' },
+      reward: -0.7,
     },
   ],
 
-  // W7: SA-12 WRIST_STRAIGHTEN
+  // W7: 슈퍼바이저 폴백 — 한 영역이 반복 막혔는데 위임할 다른 영역도 정상 → 반복 연습 권유
   [
     {
-      tone: 'normal',
-      area: 'posture',
-      message: '왼손 손목을 펴세요',
-      mark: { area: 'posture', severity: 'mild' },
+      tone: 'supervisor',
+      message: '여기서 계속 같은 문제가 발생해요. 나중에 반복 연습하면서 개선해봐요.',
     },
   ],
 ];
