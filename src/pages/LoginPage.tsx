@@ -29,17 +29,16 @@ export default function LoginPage() {
 
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const onSubmit = async (data: FormValues) => {
+  const onSubmit = async (a: FormValues) => {
     try {
       // api로 데이터 받아오기 
-      const result = await loginApi(data);
-      const { user, accessToken } = result;
+      const result = await loginApi(a);
+      const { user, access_token } = result.data;
 
-      console.log(result);
       // useAuthStore 업데이트
-      setAuth(user, accessToken);
+      setAuth(user, access_token);
 
-      navigate(from, {
+      navigate('/', {
         replace: true,
       });
     } catch (error) {
