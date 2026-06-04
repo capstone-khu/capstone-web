@@ -1,5 +1,6 @@
 import { PITCH_Y, type Bar as BarType } from '@/data/song';
-import { markBorderClass, markClass, type Area, type Mark } from '@/data/session';
+import { markBorderClass, markClass, type Mark } from '@/data/session';
+import { type Area, AREA_KO, AREA_DOT } from '@/lib/area';
 
 type Props = {
   barIndex: number;
@@ -24,6 +25,10 @@ export function BarView({
   staffClassName = 'h-auto',
 }: Props) {
   const playheadX = 8 + progress * 100;
+  const activeNote = Math.min(
+    Math.floor(progress * notes.length),
+    notes.length - 1
+  );
 
   return (
     <div className="space-y-1">
@@ -51,36 +56,52 @@ export function BarView({
           <line x1="8" y1="15" x2="8" y2="43" stroke="hsl(var(--border))" strokeWidth="0.5" />
           <line x1="108" y1="15" x2="108" y2="43" stroke="hsl(var(--border))" strokeWidth="0.5" />
 
-          {notes.map((p, i) => (
-            <g key={i}>
-              {p === 'C4' && (
-                <line
-                  x1={noteX(i) - 5}
-                  y1="50"
-                  x2={noteX(i) + 5}
-                  y2="50"
-                  stroke="hsl(var(--foreground))"
-                  strokeWidth="0.8"
+          {notes.map((p, i) => {
+            const isActive = isCurrent && i === activeNote;
+
+            const noteColor = isActive
+              ? '#c6cbd3'
+              : 'hsl(var(--foreground))';
+
+            return (
+              <g key={i}>
+                {p === 'C4' && (
+                  <line
+                    x1={noteX(i) - 5}
+                    y1="50"
+                    x2={noteX(i) + 5}
+                    y2="50"
+                    stroke={noteColor}
+                    strokeWidth="0.8"
+                  />
+                )}
+
+                <ellipse
+                  cx={noteX(i)}
+                  cy={PITCH_Y[p]}
+                  rx={isActive ? 4.8 : 3.6}
+                  ry={isActive ? 3.8 : 2.8}
+                  fill={noteColor}
+                  transform={`rotate(-20 ${noteX(i)} ${PITCH_Y[p]})`}
+                  style={{
+                    transition: 'fill 120ms ease, rx 120ms ease, ry 120ms ease',
+                  }}
                 />
-              )}
-              <ellipse
-                cx={noteX(i)}
-                cy={PITCH_Y[p]}
-                rx="3.6"
-                ry="2.8"
-                fill="hsl(var(--foreground))"
-                transform={`rotate(-20 ${noteX(i)} ${PITCH_Y[p]})`}
-              />
-              <line
-                x1={noteX(i) + 3.4}
-                y1={PITCH_Y[p] - 1}
-                x2={noteX(i) + 3.4}
-                y2={PITCH_Y[p] - 16}
-                stroke="hsl(var(--foreground))"
-                strokeWidth="0.8"
-              />
-            </g>
-          ))}
+
+                <line
+                  x1={noteX(i) + 3.4}
+                  y1={PITCH_Y[p] - 1}
+                  x2={noteX(i) + 3.4}
+                  y2={PITCH_Y[p] - 16}
+                  stroke={noteColor}
+                  strokeWidth={isActive ? '1.2' : '0.8'}
+                  style={{
+                    transition: 'stroke 120ms ease',
+                  }}
+                />
+              </g>
+            );
+          })}
 
           {isCurrent && (
             <line
@@ -120,13 +141,6 @@ export function BarView({
     </div>
   );
 }
-
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_DOT: Record<Area, string> = {
-  pitch: 'bg-pitch',
-  rhythm: 'bg-rhythm',
-  posture: 'bg-posture',
-};
 
 function MarkRow({
   area,

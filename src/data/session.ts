@@ -3,8 +3,8 @@
  * 화면 기획용. 실제 분석 결과 대신 시나리오 기반 시드.
  */
 import { SONG } from '@/data/song';
+import type { Area } from '@/lib/area';
 
-export type Area = 'pitch' | 'rhythm' | 'posture';
 export type Severity = 'mild' | 'major';
 export type Mark = { area: Area; severity: Severity; message?: string };
 

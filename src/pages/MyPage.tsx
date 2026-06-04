@@ -17,12 +17,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import { AppHeader } from '@/components/AppHeader';
 
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_PILL: Record<Area, string> = {
-  pitch: 'bg-pitch/10 text-pitch',
-  rhythm: 'bg-rhythm/10 text-rhythm',
-  posture: 'bg-posture/10 text-posture',
-};
+
 
 const AREAS: Area[] = ['pitch', 'rhythm', 'posture'];
 

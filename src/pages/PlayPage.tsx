@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { BarView, LaneGutter } from '@/components/sheet/BarView';
-import { CheckIcon, HistoryIcon, PitchIcon, RhythmIcon, UserIcon } from '@/components/icons';
+import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import { LYRICS, SONG } from '@/data/song';
 import {
@@ -13,11 +13,11 @@ import {
   currentMarksUpToWindow,
   previousCautionsForWindow,
   previousMarksByBar,
-  type Area,
   type Caution,
   type Feedback,
   type Mark,
 } from '@/data/session';
+import { type Area, AREA_KO, AREA_DOT, AREA_ICON, AREA_BG_LIGHT } from '@/lib/area';
 import { scheduleMetronome, scheduleSong, scheduleBarsLoop } from '@/lib/audio';
 import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
 import { getRecording, type Recording } from '@/data/recordings';
@@ -458,7 +458,7 @@ function PlayingView({
             <>
               {SONG.title}
               {isEnsemble && (
-                <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">
+                <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] text-background">
                   협주 · {recording.playerName}
                 </span>
               )}
@@ -840,29 +840,14 @@ function SheetStage({
 
 /* ──────────────────────────────────────────────────────────────── */
 
-const AREA_BG_LIGHT: Record<Area, string> = {
-  pitch: 'bg-pitch/10',
-  rhythm: 'bg-rhythm/10',
-  posture: 'bg-posture/10',
-};
-const AREA_SOLID: Record<Area, string> = {
-  pitch: 'bg-pitch',
-  rhythm: 'bg-rhythm',
-  posture: 'bg-posture',
-};
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_ICON: Record<Area, (p: { className?: string }) => JSX.Element> = {
-  pitch: PitchIcon,
-  rhythm: RhythmIcon,
-  posture: UserIcon,
-};
+
 
 /** 영역 배지 — 아이콘 + 영역 이름 (음정/박자/자세) */
 function AreaBadge({ area }: { area: Area }) {
   const Icon = AREA_ICON[area];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${AREA_SOLID[area]}`}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${AREA_DOT[area]}`}
     >
       <Icon className="h-3.5 w-3.5" />
       {AREA_KO[area]}

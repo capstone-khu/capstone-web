@@ -6,7 +6,7 @@
  * '디브리핑 + 다음 연습 처방'으로 번역한다. 여기서는 그 LLM 출력을
  * 영역별 피드백 개수(summary)로부터 결정적으로 생성한 목으로 대신한다.
  */
-import type { Area } from '@/data/session';
+import { type Area, AREA_GA, AREA_KO, AREAS } from '@/lib/area';
 import type { RecordingSummary } from '@/data/recordings';
 
 export type CoachLevel = 'good' | 'watch' | 'focus';
@@ -37,10 +37,6 @@ export type CoachReport = {
   /** 기본으로 선택할(가장 아쉬운) 영역 */
   primaryArea: Area;
 };
-
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_GA: Record<Area, string> = { pitch: '이', rhythm: '가', posture: '가' };
-const AREAS: Area[] = ['pitch', 'rhythm', 'posture'];
 
 const COMMENT: Record<Area, Record<CoachLevel, string>> = {
   pitch: {

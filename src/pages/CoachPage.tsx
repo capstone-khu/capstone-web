@@ -5,21 +5,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AppHeader } from '@/components/AppHeader';
 import { PitchIcon, RhythmIcon, PostureIcon } from '@/components/icons';
 import { SONG } from '@/data/song';
-import { liveSessionSummary, type Area } from '@/data/session';
+import { liveSessionSummary } from '@/data/session';
+import { type Area, AREA_KO, AREA_TEXT, AREA_PILL } from '@/lib/area';
 import { getRecording } from '@/data/recordings';
 import { buildCoachReport, type CoachLevel } from '@/data/coach';
 
-const AREA_KO: Record<Area, string> = { pitch: '음정', rhythm: '박자', posture: '자세' };
-const AREA_TEXT: Record<Area, string> = {
-  pitch: 'text-pitch',
-  rhythm: 'text-rhythm',
-  posture: 'text-posture',
-};
-const AREA_PILL: Record<Area, string> = {
-  pitch: 'bg-pitch/10 text-pitch',
-  rhythm: 'bg-rhythm/10 text-rhythm',
-  posture: 'bg-posture/10 text-posture',
-};
+
 const LEVEL_LABEL: Record<CoachLevel, string> = {
   good: '잘함',
   watch: '보통',
