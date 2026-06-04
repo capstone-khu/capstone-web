@@ -1,18 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomSheet } from '@/components/ui/sheet';
 import { AppHeader } from '@/components/AppHeader';
-import { SONG_LIST, type SongMeta } from '@/data/song';
+import { type Song, type SongData, songs } from '@/api/song';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
+import Loading from '@/components/ui/loading';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const [songList, setSongList] = useState<SongData | null>(null);
   const startSolo = usePlaySession((s) => s.startSolo);
-  const [selected, setSelected] = useState<SongMeta | null>(null);
+  const [selected, setSelected] = useState<Song | null>(null);
+
+  // Song List 불러오기
+  useEffect(() => {
+    songs()
+      .then(setSongList)
+      .catch(console.error);
+  }, []);
+
+  if (!songList) return <Loading />;
+
+  // song_list = {total: number, songs: SongData[]}
+  // SongData = {id: string, title: string }
+  const song_list = songList;
 
   const onSolo = () => {
     startSolo();
@@ -26,7 +41,7 @@ export default function HomePage() {
   };
 
   // 곡이 충분히 많을 때만 검색 노출 (MVP는 1곡이라 숨김 — 동작 안 하는 입력 방지)
-  const showSearch = SONG_LIST.length > 4;
+  const showSearch = song_list.total >= 5;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -70,11 +85,11 @@ export default function HomePage() {
               <div className="flex items-center justify-between border-b border-border px-5 py-4">
                 <p className="text-xs font-semibold tracking-wider text-muted-foreground">전체 곡</p>
                 <p className="tabular text-xs font-semibold text-muted-foreground">
-                  {SONG_LIST.length}곡
+                  {song_list.total}곡
                 </p>
               </div>
               <ul className="divide-y divide-border">
-                {SONG_LIST.map((song, i) => (
+                {song_list.songs.map((song, i) => (
                   <li key={song.id}>
                     <SongRow song={song} number={i + 1} onSelect={() => setSelected(song)} />
                   </li>
@@ -113,22 +128,11 @@ function SongRow({
   number,
   onSelect,
 }: {
-  song: SongMeta;
+  song: Song;
   number: number;
   onSelect: () => void;
 }) {
-  const isAvailable = song.status === 'available';
-  const songNo = String(number).padStart(3, '0');
-
-  if (!isAvailable) {
-    return (
-      <div className="flex cursor-not-allowed items-center gap-4 px-5 py-4 opacity-50">
-        <p className="tabular min-w-[3ch] text-2xl font-black leading-none text-gray-400">{songNo}</p>
-        <p className="min-w-0 flex-1 truncate text-base font-bold text-gray-600">{song.title}</p>
-        <ComingSoonChip />
-      </div>
-    );
-  }
+  const songNum = String(number).padStart(3, '0');
 
   return (
     <button
@@ -136,7 +140,7 @@ function SongRow({
       onClick={onSelect}
       className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none active:bg-gray-100"
     >
-      <p className="tabular min-w-[3ch] text-2xl font-black leading-none text-gray-400">{songNo}</p>
+      <p className="tabular min-w-[3ch] text-2xl font-black leading-none text-gray-400">{songNum}</p>
       <p className="min-w-0 flex-1 truncate text-base font-bold">{song.title}</p>
       <ChevronRight />
     </button>
@@ -173,10 +177,3 @@ function ChevronRight() {
   );
 }
 
-function ComingSoonChip() {
-  return (
-    <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold tracking-wide text-gray-500">
-      준비 중
-    </span>
-  );
-}

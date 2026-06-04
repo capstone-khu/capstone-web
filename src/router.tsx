@@ -19,7 +19,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/', element: <HomePage /> },
           { path: '/ensemble', element: <EnsemblePage /> },
-          { path: '/play', element: <PlayPage /> },
+          { path: '/play/:id', element: <PlayPage /> },
           { path: '/result', element: <ResultPage /> },
           { path: '/coach', element: <CoachPage /> },
           { path: '/mypage', element: <MyPage /> },
