@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type ScoreData, song_score } from "@/api/song_score";
+import { type ScoreData, song_score } from "@/api/song/song_score";
 
 export function useSong(songId?: string) {
   const [song, setSong] = useState<ScoreData | null>(null);

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomSheet } from '@/components/ui/sheet';
 import { AppHeader } from '@/components/AppHeader';
-import { type Song, type SongData, songs } from '@/api/song';
+import { type Song, type SongData, songs } from '@/api/song/song';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import Loading from '@/components/ui/loading';
