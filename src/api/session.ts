@@ -26,3 +26,10 @@ export const createSession = async (data:createRequest):Promise<createResponse> 
     console.log(response);
     return response.data;
 }
+
+export const abortSession = async (session_id:number) => {
+    console.log(`session id: ${session_id}`)
+    const response = await api.post(`/sessions/${session_id}/abort`);
+    console.log(response);
+    return response.data;
+}

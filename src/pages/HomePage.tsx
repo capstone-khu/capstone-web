@@ -33,7 +33,7 @@ export default function HomePage() {
       alert(res.message);
     }
     else {
-      startSolo(Number(id));
+      startSolo(Number(res.data.session_id));
       navigate(`/play/${id}`);
     }
   };

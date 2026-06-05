@@ -36,7 +36,7 @@ export default function EnsemblePage() {
     }
     else {
       timerRef.current = window.setTimeout(() => {
-        startEnsemble(partner.recording_id);
+        startEnsemble(res.data.session_id, partner.recording_id);
         navigate(`/play/${id}`);
       }, 1400);
     }
