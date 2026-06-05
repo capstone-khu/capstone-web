@@ -4,29 +4,40 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomSheet } from '@/components/ui/sheet';
 import { AppHeader } from '@/components/AppHeader';
-import { SONG_LIST, type SongMeta } from '@/data/song';
+import { type Song, } from '@/api/songs/song.type';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
+import Loading from '@/components/ui/loading';
+import { useSongList } from '@/hooks/useSongList';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const startSolo = usePlaySession((s) => s.startSolo);
-  const [selected, setSelected] = useState<SongMeta | null>(null);
+  const [selected, setSelected] = useState<Song | null>(null);
 
-  const onSolo = () => {
+  // Song List 불러오기
+  const { songList, loading } = useSongList();
+
+  if (loading || !songList) return <Loading />;
+
+  // song_list = {total: number, songs: SongData[]}
+  // SongData = {id: string, title: string }
+  const song_list = songList;
+
+  const onSolo = (id: string) => {
     startSolo();
-    navigate('/play');
+    navigate(`/play/${id}`);
   };
 
   // 협주: 고른 곡을 협주 선택 화면까지 들고 가 맥락을 유지한다.
-  const onEnsemble = () => {
+  const onEnsemble = (id: string) => {
     if (!selected) return;
-    navigate('/ensemble', { state: { songId: selected.id, songTitle: selected.title } });
+    navigate(`/ensemble/${id}`, { state: { songId: selected.id, songTitle: selected.title } });
   };
 
   // 곡이 충분히 많을 때만 검색 노출 (MVP는 1곡이라 숨김 — 동작 안 하는 입력 방지)
-  const showSearch = SONG_LIST.length > 4;
+  const showSearch = song_list.total >= 5;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -70,11 +81,11 @@ export default function HomePage() {
               <div className="flex items-center justify-between border-b border-border px-5 py-4">
                 <p className="text-xs font-semibold tracking-wider text-muted-foreground">전체 곡</p>
                 <p className="tabular text-xs font-semibold text-muted-foreground">
-                  {SONG_LIST.length}곡
+                  {song_list.total}곡
                 </p>
               </div>
               <ul className="divide-y divide-border">
-                {SONG_LIST.map((song, i) => (
+                {song_list.songs.map((song, i) => (
                   <li key={song.id}>
                     <SongRow song={song} number={i + 1} onSelect={() => setSelected(song)} />
                   </li>
@@ -93,10 +104,10 @@ export default function HomePage() {
         description="어떻게 연주할까요?"
       >
         <div className="space-y-3 p-6 pt-4">
-          <Button size="xl" className="w-full" onClick={onSolo}>
+          <Button size="xl" className="w-full" onClick={() => selected && onSolo(selected.id)}>
             혼자 연주
           </Button>
-          <Button size="xl" variant="outline" className="w-full" onClick={onEnsemble}>
+          <Button size="xl" variant="outline" className="w-full" onClick={() => selected && onEnsemble(selected.id)}>
             협주하기
           </Button>
           <p className="pt-1 text-center text-xs text-muted-foreground">
@@ -113,22 +124,11 @@ function SongRow({
   number,
   onSelect,
 }: {
-  song: SongMeta;
+  song: Song;
   number: number;
   onSelect: () => void;
 }) {
-  const isAvailable = song.status === 'available';
-  const songNo = String(number).padStart(3, '0');
-
-  if (!isAvailable) {
-    return (
-      <div className="flex cursor-not-allowed items-center gap-4 px-5 py-4 opacity-50">
-        <p className="tabular min-w-[3ch] text-2xl font-black leading-none text-gray-400">{songNo}</p>
-        <p className="min-w-0 flex-1 truncate text-base font-bold text-gray-600">{song.title}</p>
-        <ComingSoonChip />
-      </div>
-    );
-  }
+  const songNum = String(number).padStart(3, '0');
 
   return (
     <button
@@ -136,7 +136,7 @@ function SongRow({
       onClick={onSelect}
       className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none active:bg-gray-100"
     >
-      <p className="tabular min-w-[3ch] text-2xl font-black leading-none text-gray-400">{songNo}</p>
+      <p className="tabular min-w-[3ch] text-2xl font-black leading-none text-gray-400">{songNum}</p>
       <p className="min-w-0 flex-1 truncate text-base font-bold">{song.title}</p>
       <ChevronRight />
     </button>
@@ -173,10 +173,3 @@ function ChevronRight() {
   );
 }
 
-function ComingSoonChip() {
-  return (
-    <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold tracking-wide text-gray-500">
-      준비 중
-    </span>
-  );
-}

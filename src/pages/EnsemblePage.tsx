@@ -1,32 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { OTHER_RECORDINGS, type Recording } from '@/data/recordings';
-import { SONG } from '@/data/song';
 import { AppHeader } from '@/components/AppHeader';
 import { usePlaySession } from '@/store/usePlaySession';
+import { useSongPartners } from '@/hooks/useSongPartners';
+import { type Partner } from '@/api/songs/song.type';
+import { formatRelativeAndAbsolute } from '@/lib/utils'
+import Loading from '@/components/ui/loading';
 
 export default function EnsemblePage() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const startEnsemble = usePlaySession((s) => s.startEnsemble);
-  const [loadingRec, setLoadingRec] = useState<Recording | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const { id } = useParams();
+  const { partnersData, loading } = useSongPartners(id);
 
-  // 홈에서 고른 곡 맥락을 이어받는다 (직접 진입 시 기본 곡으로 폴백).
-  const songState = location.state as { songId?: string; songTitle?: string } | null;
-  const songId = songState?.songId ?? 'twinkle';
-  const songTitle = songState?.songTitle ?? SONG.title;
-  const recordings = OTHER_RECORDINGS.filter((r) => r.songId === songId);
+  const navigate = useNavigate();
+  const startEnsemble = usePlaySession((s) => s.startEnsemble);
+  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
+  const timerRef = useRef<number | null>(null);
 
   useEffect(() => () => window.clearTimeout(timerRef.current ?? undefined), []);
 
+
+  if (loading || !partnersData) return <Loading />;
+  // 협주할 파트너 선택
+  const { song_title, partners } = partnersData;
+
+
   // 협주 상대 선택 → 음원 로딩 인디케이터를 잠깐 보여준 뒤 연주로 진입.
-  const onSelect = (rec: Recording) => {
-    setLoadingRec(rec);
+  const onSelect = (partner: Partner) => {
+    setSelectedPartner(partner);
+
     timerRef.current = window.setTimeout(() => {
-      startEnsemble(rec.id);
-      navigate('/play');
+      startEnsemble(partner.recording_id);
+      navigate(`/play/${id}`);
     }, 1400);
   };
 
@@ -38,12 +43,12 @@ export default function EnsemblePage() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">누구와 함께 연주할까요?</h1>
           <p className="text-base text-muted-foreground">
-            <span className="font-semibold text-foreground">「{songTitle}」</span>을 함께 연주할 상대를
+            <span className="font-semibold text-foreground">「{song_title}」</span>을 함께 연주할 상대를
             선택하세요.
           </p>
         </div>
 
-        {recordings.length === 0 ? (
+        {!loading && (!partners || partners.length === 0) ? (
           <Card>
             <CardContent className="p-6 text-center text-sm text-muted-foreground">
               아직 이 곡으로 협주할 수 있는 녹음이 없어요.
@@ -51,19 +56,19 @@ export default function EnsemblePage() {
           </Card>
         ) : (
         <ul className="space-y-3.5">
-          {recordings.map((rec) => (
-            <li key={rec.id}>
+          {partners.map((partner) => (
+            <li key={partner.recording_id}>
               <button
                 type="button"
-                onClick={() => onSelect(rec)}
+                onClick={() => onSelect(partner)}
                 className="block w-full text-left transition-transform active:scale-[0.99]"
               >
                 <Card className="transition-colors hover:bg-gray-50">
                   <CardContent className="flex items-center gap-5 p-6">
                     <div className="min-w-0 flex-1">
-                      <p className="text-xl font-bold">{rec.playerName}</p>
+                      <p className="text-xl font-bold">{partner.user_name}</p>
                       <p className="mt-0.5 text-sm text-muted-foreground">
-                        {rec.songTitle} · {rec.date}
+                         {formatRelativeAndAbsolute(partner.recorded_at)}
                       </p>
                     </div>
                     <span className="shrink-0 whitespace-nowrap rounded-full bg-foreground px-5 py-2.5 text-sm font-bold text-background">
@@ -78,7 +83,7 @@ export default function EnsemblePage() {
         )}
       </main>
 
-      {loadingRec && (
+      {selectedPartner && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-7 bg-background px-6">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 animate-dot-bounce rounded-full bg-foreground [animation-delay:-0.32s]" />
@@ -88,7 +93,7 @@ export default function EnsemblePage() {
           <div className="space-y-1.5 text-center">
             <p className="text-lg font-bold">협주 음원을 불러오고 있어요</p>
             <p className="text-sm text-muted-foreground">
-              {loadingRec.playerName} 님과 함께 연주할 준비 중이에요
+              {selectedPartner.user_name} 님과 함께 연주할 준비 중이에요
             </p>
           </div>
         </div>

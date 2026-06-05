@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
@@ -18,85 +18,66 @@ import {
   type Mark,
 } from '@/data/session';
 import { type Area, AREA_KO, AREA_DOT, AREA_ICON, AREA_BG_LIGHT } from '@/lib/area';
-import { scheduleMetronome, scheduleSong, scheduleBarsLoop } from '@/lib/audio';
+import { scheduleMetronome } from '@/lib/audio';
 import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
 import { getRecording, type Recording } from '@/data/recordings';
+import Loading from '@/components/ui/loading';
+import { useSongScore } from '@/hooks/play/useSongScore';
+import { useMediaPermission } from '@/hooks/play/useMediaPermission';
+import { type SongDataDetail, usePlayProgress } from '@/hooks/play/usePlayProgress';
+import { useSongPartners } from '@/hooks/useSongPartners';
 
-const BAR_DURATION = (60 / SONG.bpm) * SONG.beatsPerBar;
-const WINDOW_DURATION = BAR_DURATION * ANALYSIS_WINDOW_BARS;
-const TOTAL_BARS = SONG.bars.length;
-const TOTAL_WINDOWS = Math.ceil(TOTAL_BARS / ANALYSIS_WINDOW_BARS);
-const TOTAL_DURATION = BAR_DURATION * TOTAL_BARS;
-
-type Stage = 'permission' | 'playing';
 
 export default function PlayPage() {
+  const { id } = useParams();
+  // 선택한 곡 정보 조회
+  const { song, loading } = useSongScore(id);
+  
+  if (loading || !song ) return <Loading />;
+
+  return <PlayPageInner song={song.song} />;
+}
+
+function PlayPageInner({ song }: { song: SongDataDetail }) {
+  const [focusIdx, setFocusIdx] = useState(0);
   const navigate = useNavigate();
+  const { stream, error, requesting, stage, requestPermission, cleanup } = useMediaPermission();
+
+  const focusBars = usePlaySession((s) => s.focusBars);
+  const activeFocusBar = focusBars.length > 0 ? (focusBars[focusIdx] ?? 0) : null;
+
+  // ✅ 이제 song은 절대 null이 아님
+  const progress = usePlayProgress({ song, focusBar: activeFocusBar });
+
   const mode = usePlaySession((s) => s.mode);
   const recordingId = usePlaySession((s) => s.recordingId);
   const skipPermission = usePlaySession((s) => s.skipPermission);
-  const focusBars = usePlaySession((s) => s.focusBars);
-  const [focusIdx, setFocusIdx] = useState(0);
-  const isFocus = focusBars.length > 0;
-  const activeFocusBar = isFocus ? (focusBars[focusIdx] ?? 0) : null;
   const recording = getRecording(recordingId);
-
-  const [stage, setStage] = useState<Stage>('permission');
-  const [permissionError, setPermissionError] = useState<string | null>(null);
-  const [requesting, setRequesting] = useState(false);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-
-  const requestPermissionAndStart = async () => {
-    setRequesting(true);
-    setPermissionError(null);
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      setStream(s);
-      setStage('playing');
-    } catch {
-      setPermissionError(
-        '카메라 또는 마이크 권한이 거절되었습니다. 브라우저 주소창의 권한 아이콘에서 허용 후 다시 시도해주세요.',
-      );
-    } finally {
-      setRequesting(false);
-    }
-  };
+ 
 
   // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
   useEffect(() => {
-    if (skipPermission) requestPermissionAndStart();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      setStream((current) => {
-        current?.getTracks().forEach((t) => t.stop());
-        return null;
-      });
-    };
-  }, []);
+    if (skipPermission) requestPermission();
+  }, [skipPermission, requestPermission]);
 
   const handleFinish = () => {
-    stream?.getTracks().forEach((t) => t.stop());
-    setStream(null);
+    cleanup();
     navigate('/result');
   };
 
   const handleExit = () => {
-    stream?.getTracks().forEach((t) => t.stop());
-    setStream(null);
+    cleanup();
     navigate('/');
   };
 
   if (stage === 'permission') {
     // 다시 연주로 진입했고 아직 에러가 없으면 권한 카드 대신 간단한 준비 로더 노출
-    if (skipPermission && !permissionError) return <PrepLoader />;
+    if (skipPermission && !error) return <PrepLoader />;
     return (
       <PermissionView
         requesting={requesting}
-        error={permissionError}
-        onStart={requestPermissionAndStart}
+        error={error}
+        onStart={requestPermission}
         onBack={() => navigate('/')}
       />
     );
@@ -105,6 +86,7 @@ export default function PlayPage() {
   return (
     <PlayingView
       key={`play-${activeFocusBar ?? 'normal'}`}
+      progress={progress}
       stream={stream}
       mode={mode}
       recording={recording}
@@ -304,6 +286,7 @@ function CountInOverlay({ onDone }: { onDone: () => void }) {
 
 function PlayingView({
   stream,
+  progress,
   mode,
   recording,
   focusBar,
@@ -314,6 +297,7 @@ function PlayingView({
   onExit,
 }: {
   stream: MediaStream | null;
+  progress: ReturnType<typeof usePlayProgress>;
   mode: PlayMode;
   recording: Recording | null;
   focusBar: number | null;
@@ -325,106 +309,34 @@ function PlayingView({
 }) {
   const isEnsemble = mode === 'ensemble' && !!recording;
 
-  // 집중 반복 레슨 — 틀린 '그 한 마디'만 반복(loop)한다.
-  const focused = focusBar != null;
-  const FOCUS_LOOPS = 10;
-  const phraseStart = focused ? focusBar : 0;
-  const phraseEnd = focused ? focusBar : TOTAL_BARS - 1;
-  const phraseBars = phraseEnd - phraseStart + 1;
-  const PHRASE_DURATION = phraseBars * BAR_DURATION;
-  const focusDuration = PHRASE_DURATION * FOCUS_LOOPS;
-
-  const [elapsed, setElapsed] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isFinished, setIsFinished] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [introDone, setIntroDone] = useState(false);
-  const rafRef = useRef<number | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const songStartTimeRef = useRef<number>(0);
 
-  // 전주(메트로놈)가 끝나면 곡 AudioContext를 만들고 스케줄 시작
-  const handleIntroDone = () => {
-    const Ctx = window.AudioContext;
-    if (Ctx) {
-      const ctx = new Ctx();
-      audioCtxRef.current = ctx;
-      ctx.resume().then(() => {
-        songStartTimeRef.current = ctx.currentTime;
-        if (focused) {
-          scheduleBarsLoop(ctx, songStartTimeRef.current, phraseStart, phraseEnd, FOCUS_LOOPS);
-        } else {
-          scheduleSong(ctx, songStartTimeRef.current);
-        }
-      });
-    }
-    setIntroDone(true);
-  };
+  const {
+    elapsed,
+    focused,
+    isFinished,
+    introDone,
+    currentBarIndex,
+    progressInBar,
+    currentWindowIndex,
+    focusLoopRound,
+    TOTAL_BARS,
+    FOCUS_LOOPS,
+    pause,
+    resume,
+    handleIntroDone,
+  } = progress;
 
-  // 집중 반복 '다시 한 번' — 카운트인부터 재시작.
-  const restartFocus = () => {
-    audioCtxRef.current?.close();
-    audioCtxRef.current = null;
-    setElapsed(0);
-    setIsFinished(false);
-    setIsPlaying(true);
-    setIntroDone(false);
-  };
-
-  useEffect(() => {
-    return () => {
-      audioCtxRef.current?.close();
-      audioCtxRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!introDone) return;
-    const ctx = audioCtxRef.current;
-    if (isFinished || !isPlaying) {
-      ctx?.suspend();
-      return;
-    }
-    ctx?.resume();
-
-    const tick = () => {
-      const ac = audioCtxRef.current;
-      const now = ac ? ac.currentTime - songStartTimeRef.current : 0;
-      const endAt = focused ? focusDuration : TOTAL_DURATION;
-      if (now >= endAt) {
-        setElapsed(endAt);
-        setIsFinished(true);
-        return;
-      }
-      setElapsed(now);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [introDone, isPlaying, isFinished, focused, focusDuration]);
-
-  const playClock = focused ? elapsed % PHRASE_DURATION : elapsed;
-  const focusLoopRound = focused
-    ? Math.min(Math.floor(elapsed / PHRASE_DURATION) + 1, FOCUS_LOOPS)
-    : 0;
-  const currentBarIndex = focused
-    ? phraseStart + Math.min(Math.floor(playClock / BAR_DURATION), phraseBars - 1)
-    : Math.min(Math.floor(elapsed / BAR_DURATION), TOTAL_BARS - 1);
-  const progressInBar = (playClock % BAR_DURATION) / BAR_DURATION;
-
-  const currentWindowIndex = focused
-    ? Math.min(Math.floor(currentBarIndex / ANALYSIS_WINDOW_BARS), TOTAL_WINDOWS - 1)
-    : Math.min(Math.floor(elapsed / WINDOW_DURATION), TOTAL_WINDOWS - 1);
+  const isPlaying = introDone && !isFinished && progress.isPlaying;
 
   const currentMarks = useMemo(
     () => currentMarksUpToWindow(currentWindowIndex),
     [currentWindowIndex],
   );
+
   const previousMarks = useMemo(() => previousMarksByBar(), []);
 
-  const currentFeedbacks: Feedback[] = useMemo(
+  const currentFeedbacks = useMemo(
     () => FEEDBACK_SEQUENCE[currentWindowIndex] ?? [],
     [currentWindowIndex],
   );
@@ -434,31 +346,40 @@ function PlayingView({
     [currentWindowIndex],
   );
 
-  // 자세 영역이 활성(피드백 area=posture 또는 영역 전환 to=posture)일 때 영상 카드 강조
   const isPostureAlert = useMemo(
-    () => currentFeedbacks.some((fb) => fb.tone === 'normal' && fb.area === 'posture'),
+    () =>
+      currentFeedbacks.some(
+        (fb) => fb.tone === 'normal' && fb.area === 'posture',
+      ),
     [currentFeedbacks],
   );
+
+  const handleBack = () => {
+    if (isFinished || focused) {
+      onExit();
+      return;
+    }
+    pause();
+    setShowExitConfirm(true);
+  };
+
+  const handleTogglePlay = () => {
+    if (progress.isPlaying) pause();
+    else resume();
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
-        onBack={
-          isFinished || focused
-            ? onExit
-            : () => {
-                setIsPlaying(false);
-                setShowExitConfirm(true);
-              }
-        }
+        onBack={handleBack}
         title={
-          focused ? (
+          focused && focusBar !== null ? (
             <>마디 {focusBar + 1} 집중 반복</>
           ) : (
             <>
               {SONG.title}
               {isEnsemble && (
-                <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] text-background">
+                <span className="ml-2 rounded-full bg-foreground px-2 py-0.5 text-[11px] text-background">
                   협주 · {recording.playerName}
                 </span>
               )}
@@ -472,23 +393,23 @@ function PlayingView({
                 ? `반복 ${focusLoopRound}/${FOCUS_LOOPS}회`
                 : `마디 ${Math.min(currentBarIndex + 1, TOTAL_BARS)}/${TOTAL_BARS}`}
             </p>
-            {introDone && !isFinished && isPlaying && (
-              <Button size="sm" variant="outline" onClick={() => setIsPlaying(false)}>
+
+            {isPlaying && (
+              <Button size="sm" variant="outline" onClick={handleTogglePlay}>
                 일시정지
               </Button>
             )}
-            {introDone && !isFinished && !isPlaying && (
-              <Button size="sm" onClick={() => setIsPlaying(true)}>
+
+            {!progress.isPlaying && introDone && !isFinished && (
+              <Button size="sm" onClick={resume}>
                 재개
               </Button>
             )}
-            {/* 완료 시 액션은 하단 완료 카드로 일원화 (헤더 중복 제거) */}
           </>
         }
       />
 
       <main className="container max-w-7xl space-y-4 py-6">
-        {/* 약점 마디가 여러 개면 마디 탭으로 전환 (탭 선택 시 그 마디로 카운트인부터 재시작) */}
         {focusBars.length > 1 && (
           <div className="flex flex-wrap gap-2">
             {focusBars.map((b, i) => (
@@ -507,20 +428,20 @@ function PlayingView({
             ))}
           </div>
         )}
-        {/* 좌: 영상 2 / 우: 악보 3 비율 — 같은 행, 동일 높이로 stretch */}
+
         <div className="grid items-stretch gap-4 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            {/* 협주여도 상대 녹화 영상은 띄우지 않는다 — 내 카메라만 보이고 상대는 음원만 재생.
-                (연주 종료 후 좌우 합성 '협주 영상'으로 만들어져 마이페이지에서 열람) */}
             <CameraStage stream={stream} alertPosture={isPostureAlert} />
+
             {isEnsemble && (
               <PartnerAudioBar
                 name={recording.playerName}
-                progress={elapsed / TOTAL_DURATION}
-                playing={isPlaying && !isFinished && introDone}
+                progress={elapsed / progress.TOTAL_DURATION}
+                playing={progress.isPlaying && introDone && !isFinished}
               />
             )}
           </div>
+
           <div className="lg:col-span-3">
             <SheetStage
               currentBarIndex={currentBarIndex}
@@ -535,23 +456,26 @@ function PlayingView({
           </div>
         </div>
 
-        {/* 일반 연주: 좌(지난)/우(현재) 피드백. 집중 반복 모드에선 피드백 대신 짧은 가이드. */}
-        {focused ? (
+        {focused && focusBar !== null ? (
           <Card>
             <CardContent className="p-5 text-center">
               <p className="text-sm font-semibold">
-                자주 흔들렸던 마디 {focusBar + 1}이에요. 천천히, 정확하게 반복해보세요.
+                자주 흔들렸던 마디 {focusBar + 1}이에요. 천천히 반복해보세요.
               </p>
             </CardContent>
           </Card>
         ) : (
           <section className="flex items-stretch gap-3">
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <PreviousCaution key={`caution-${currentWindowIndex}`} cautions={previousCautions} />
+              <PreviousCaution cautions={previousCautions} />
               <FeedbackCaption tone="previous" />
             </div>
+
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <CurrentFeedback feedbacks={currentFeedbacks} barIndex={currentWindowIndex} />
+              <CurrentFeedback
+                feedbacks={currentFeedbacks}
+                barIndex={currentWindowIndex}
+              />
               <FeedbackCaption tone="current" />
             </div>
           </section>
@@ -566,31 +490,36 @@ function PlayingView({
                 </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {focused
-                    ? '이 구간을 충분히 반복했어요. 수고했어요!'
+                    ? '이 구간을 충분히 반복했어요.'
                     : isEnsemble
-                      ? '협주 영상이 만들어졌어요. 마이페이지에서 다시 볼 수 있어요.'
-                      : '이번 연주가 보관함에 자동 저장되었습니다 결과를 확인해주세요'}
+                      ? '협주 영상이 저장되었습니다.'
+                      : '연주가 저장되었습니다.'}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
+
+              <div className="flex gap-3">
                 {focused ? (
                   <>
-                    <Button size="lg" variant="outline" onClick={onExit}>
+                    <Button variant="outline" size="lg" onClick={onExit}>
                       돌아가기
                     </Button>
+
                     {focusIdx < focusBars.length - 1 ? (
-                      <Button size="lg" onClick={() => onSelectFocusIdx(focusIdx + 1)}>
-                        다음 마디 (마디 {focusBars[focusIdx + 1] + 1})
+                      <Button
+                        size="lg"
+                        onClick={() => onSelectFocusIdx(focusIdx + 1)}
+                      >
+                        다음 마디
                       </Button>
                     ) : (
-                      <Button size="lg" onClick={restartFocus}>
-                        다시 한 번
+                      <Button size="lg" onClick={progress.restart}>
+                        다시 연습
                       </Button>
                     )}
                   </>
                 ) : (
                   <>
-                    <Button size="lg" variant="outline" onClick={onExit}>
+                    <Button variant="outline" size="lg" onClick={onExit}>
                       홈으로
                     </Button>
                     <Button size="lg" onClick={onFinish}>
@@ -610,9 +539,10 @@ function PlayingView({
         title="연주를 종료할까요?"
       >
         <div className="space-y-5 p-6">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            지금 종료하면 이번 연주는 저장되지 않고 처음 화면으로 돌아갑니다.
+          <p className="text-sm text-muted-foreground">
+            종료하면 저장되지 않고 홈으로 돌아갑니다.
           </p>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Button variant="outline" onClick={() => setShowExitConfirm(false)}>
               계속하기

@@ -10,7 +10,7 @@ export default function Loading() {
             rounded-full
             border-4
             border-gray-200
-            border-t-blue-400
+            border-t-black
             animate-spin
           "
         />
