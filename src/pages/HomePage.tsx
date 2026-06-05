@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomSheet } from '@/components/ui/sheet';
 import { AppHeader } from '@/components/AppHeader';
-import { songs } from '@/api/songs/song';
-import { type Song, type SongListData } from '@/api/songs/song.type';
+import { type Song, } from '@/api/songs/song.type';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import Loading from '@/components/ui/loading';

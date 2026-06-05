@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { OTHER_RECORDINGS, type Recording } from '@/data/recordings';
 import { AppHeader } from '@/components/AppHeader';
 import { usePlaySession } from '@/store/usePlaySession';
 import { useSongPartners } from '@/hooks/useSongPartners';
-import { type Partner, type PartnersData } from '@/api/songs/song.type';
+import { type Partner } from '@/api/songs/song.type';
 import { formatRelativeAndAbsolute } from '@/lib/utils'
 import Loading from '@/components/ui/loading';
 
