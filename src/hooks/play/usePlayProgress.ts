@@ -3,6 +3,7 @@
 
 import { scheduleBarsLoop, scheduleSong } from "@/lib/audio";
 import { useRef, useState, useEffect } from "react";
+import { abortSession } from "@/api/session";
 
 export interface SongDataDetail {
     id: number;
@@ -106,7 +107,7 @@ export const usePlayProgress = ({ song, focusBar }: PlayProgressInput): PlayProg
             );
 
     // 일시정지/재개 — AudioContext의 suspend/resume과 연동
-    const pause = () => {
+    const pause = async () => {
         setIsPlaying(false);
     };
 

@@ -25,13 +25,13 @@ import Loading from '@/components/ui/loading';
 import { useSongScore } from '@/hooks/play/useSongScore';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { type SongDataDetail, usePlayProgress } from '@/hooks/play/usePlayProgress';
+import { abortSession } from '@/api/session';
 
 
 export default function PlayPage() {
   const { id } = useParams();
   // 선택한 곡 정보 조회
   const { song, loading } = useSongScore(id);
-  
   if (loading || !song ) return <Loading />;
 
   return <PlayPageInner song={song.song} />;
@@ -52,6 +52,7 @@ function PlayPageInner({ song }: { song: SongDataDetail }) {
   const recordingId = usePlaySession((s) => s.recordingId);
   const skipPermission = usePlaySession((s) => s.skipPermission);
   const recording = getRecording(recordingId);
+  const session_id = usePlaySession((state) => state.session_id);
  
 
   // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
@@ -64,8 +65,18 @@ function PlayPageInner({ song }: { song: SongDataDetail }) {
     navigate('/result');
   };
 
-  const handleExit = () => {
+  const handleExit = async (session_id:number | undefined | null) => {
     cleanup();
+    if(!session_id) {
+      alert('세션 아이디 저장 오류');
+      return;
+    }
+    const res = await abortSession(session_id);
+    console.log(res);
+    if(!res.success) {
+      alert(res.message);
+    }
+      console.log('세션 중단 완료');
     navigate('/');
   };
 
@@ -94,7 +105,7 @@ function PlayPageInner({ song }: { song: SongDataDetail }) {
       focusIdx={focusIdx}
       onSelectFocusIdx={setFocusIdx}
       onFinish={handleFinish}
-      onExit={handleExit}
+      onExit={() => handleExit(session_id)}
     />
   );
 }
@@ -360,6 +371,7 @@ function PlayingView({
     }
     pause();
     setShowExitConfirm(true);
+    return;
   };
 
   const handleTogglePlay = () => {
@@ -534,7 +546,9 @@ function PlayingView({
 
       <Modal
         open={showExitConfirm}
-        onClose={() => setShowExitConfirm(false)}
+        onClose={() => {
+          setShowExitConfirm(false)
+        }}
         title="연주를 종료할까요?"
       >
         <div className="space-y-5 p-6">
