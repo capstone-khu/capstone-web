@@ -9,11 +9,12 @@ export type PlayMode = 'solo' | 'ensemble';
 type PlaySessionState = {
   mode: PlayMode;
   recordingId: string | null;
+  session_id?: number | null,
   skipPermission: boolean;
   /** 집중 반복 레슨 대상 마디(0-based) 목록. 비어 있으면 일반 연주. 여러 개면 마디 탭으로 전환. */
   focusBars: number[];
   /** 혼자 연주 시작 */
-  startSolo: () => void;
+  startSolo: (arg0:number) => void;
   /** 선택한 녹음과 함께 협주 시작 */
   startEnsemble: (recordingId: string) => void;
   /** 같은 설정으로 다시 연주 — 권한 화면만 건너뜀 */
@@ -27,7 +28,7 @@ export const usePlaySession = create<PlaySessionState>((set) => ({
   recordingId: null,
   skipPermission: false,
   focusBars: [],
-  startSolo: () => set({ mode: 'solo', recordingId: null, skipPermission: false, focusBars: [] }),
+  startSolo: (id) => set({ mode: 'solo', session_id: id, recordingId: null, skipPermission: false, focusBars: [] }),
   startEnsemble: (recordingId) =>
     set({ mode: 'ensemble', recordingId, skipPermission: false, focusBars: [] }),
   replay: () => set({ skipPermission: true }),

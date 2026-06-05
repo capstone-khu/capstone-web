@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import Loading from '@/components/ui/loading';
 import { useSongList } from '@/hooks/useSongList';
+import { createSession } from '@/api/session';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -25,9 +26,16 @@ export default function HomePage() {
   // SongData = {id: string, title: string }
   const song_list = songList;
 
-  const onSolo = (id: string) => {
-    startSolo();
-    navigate(`/play/${id}`);
+  const onSolo = async (id: string) => {
+    const res = await createSession({song_id: Number(id), mode: 'solo'});
+    console.log(res);
+    if(!res.success) {
+      alert(res.message);
+    }
+    else {
+      startSolo(Number(id));
+      navigate(`/play/${id}`);
+    }
   };
 
   // 협주: 고른 곡을 협주 선택 화면까지 들고 가 맥락을 유지한다.

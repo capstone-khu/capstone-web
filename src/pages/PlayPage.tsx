@@ -31,7 +31,6 @@ export default function PlayPage() {
   const { id } = useParams();
   // 선택한 곡 정보 조회
   const { song, loading } = useSongScore(id);
-  
   if (loading || !song ) return <Loading />;
 
   return <PlayPageInner song={song.song} />;
