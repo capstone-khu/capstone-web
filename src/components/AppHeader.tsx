@@ -13,7 +13,7 @@ export function AppHeader({
   right,
 }: {
   title: ReactNode;
-  onBack?: (arg0:number) => void;
+  onBack?: () => void;
   right?: ReactNode;
 }) {
   return (
@@ -23,7 +23,7 @@ export function AppHeader({
           {onBack && (
             <button
               type="button"
-              onClick={() => onBack}
+              onClick={onBack}
               aria-label="뒤로"
               className="-ml-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-gray-100 hover:text-foreground"
             >
