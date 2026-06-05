@@ -18,23 +18,22 @@ import {
   type Mark,
 } from '@/data/session';
 import { type Area, AREA_KO, AREA_DOT, AREA_ICON, AREA_BG_LIGHT } from '@/lib/area';
-import { scheduleMetronome, scheduleSong, scheduleBarsLoop } from '@/lib/audio';
+import { scheduleMetronome } from '@/lib/audio';
 import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
 import { getRecording, type Recording } from '@/data/recordings';
 import Loading from '@/components/ui/loading';
-import { useSong } from '@/hooks/play/useSong';
+import { useSongScore } from '@/hooks/play/useSongScore';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { type SongDataDetail, usePlayProgress } from '@/hooks/play/usePlayProgress';
-
-
+import { useSongPartners } from '@/hooks/useSongPartners';
 
 
 export default function PlayPage() {
   const { id } = useParams();
   // 선택한 곡 정보 조회
-  const { song, loading } = useSong(id);
-
-  if (loading || !song) return <Loading />;
+  const { song, loading } = useSongScore(id);
+  
+  if (loading || !song ) return <Loading />;
 
   return <PlayPageInner song={song.song} />;
 }

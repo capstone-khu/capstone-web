@@ -4,26 +4,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomSheet } from '@/components/ui/sheet';
 import { AppHeader } from '@/components/AppHeader';
-import { type Song, type SongData, songs } from '@/api/song/song';
+import { songs } from '@/api/songs/song';
+import { type Song, type SongListData } from '@/api/songs/song.type';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import Loading from '@/components/ui/loading';
+import { useSongList } from '@/hooks/useSongList';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const [songList, setSongList] = useState<SongData | null>(null);
   const startSolo = usePlaySession((s) => s.startSolo);
   const [selected, setSelected] = useState<Song | null>(null);
 
   // Song List 불러오기
-  useEffect(() => {
-    songs()
-      .then(setSongList)
-      .catch(console.error);
-  }, []);
+  const { songList, loading } = useSongList();
 
-  if (!songList) return <Loading />;
+  if (loading || !songList) return <Loading />;
 
   // song_list = {total: number, songs: SongData[]}
   // SongData = {id: string, title: string }

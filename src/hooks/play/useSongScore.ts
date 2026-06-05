@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { type ScoreData, song_score } from "@/api/song/song_score";
+import { type ScoreData } from "@/api/songs/song.type";
+import { song_score } from "@/api/songs/song_score";
 
-export function useSong(songId?: string) {
+// 
+export function useSongScore(songId?: string) {
   const [song, setSong] = useState<ScoreData | null>(null);
   const [loading, setLoading] = useState(false);
 
