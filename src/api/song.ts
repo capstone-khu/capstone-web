@@ -1,9 +1,9 @@
 import { api } from './client';
 
 export interface Song {
-  id: string;
+  id: number;
+  number: number;
   title: string;
-  status: 'available' | 'coming_soon';
 }
 
 export interface SongData {
