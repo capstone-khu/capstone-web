@@ -25,8 +25,6 @@ import Loading from '@/components/ui/loading';
 import { useSongScore } from '@/hooks/play/useSongScore';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { type SongDataDetail, usePlayProgress } from '@/hooks/play/usePlayProgress';
-import { useSongPartners } from '@/hooks/useSongPartners';
-
 
 export default function PlayPage() {
   const { id } = useParams();
