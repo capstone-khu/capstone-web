@@ -9,12 +9,6 @@ export interface DuetVideo {
   created_at: string;
 }
 
-interface DuetVideoResponse {
-  success: boolean;
-  status: number;
-  message: string;
-  data: DuetVideo;
-}
 
 // 협주 영상 조회
 export const getDuetVideo = async (

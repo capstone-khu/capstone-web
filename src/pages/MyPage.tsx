@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 
 import { AREAS, AREA_PILL, AREA_KO } from '@/lib/area';
-import { ChevronLeftIcon, PlayIcon, PauseIcon } from '@/components/icons';
+import { ChevronLeftIcon } from '@/components/icons';
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { usePlaySession } from '@/store/usePlaySession';
 import { AppHeader } from '@/components/AppHeader';
 
 import { type RecordingItem, type RecordingItemSummary } from '@/api/history';
@@ -23,8 +22,6 @@ export default function MyPage() {
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-
-  const startFocus = usePlaySession((s) => s.startFocus);
 
   const [page, setPage] = useState(1);
   const [videoOpen, setVideoOpen] = useState(false);

@@ -24,12 +24,6 @@ export interface RecordingsData {
   items: RecordingItem[];
 }
 
-interface RecordingsResponse {
-  success: boolean;
-  status: number;
-  message: string;
-  data: RecordingsData;
-}
 
 // 연주 이력 조회
 export const getRecordHistory = async (): Promise<RecordingsData> => {
