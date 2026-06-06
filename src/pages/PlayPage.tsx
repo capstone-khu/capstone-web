@@ -17,8 +17,7 @@ import {
 } from '@/data/session';
 import { type Area, AREA_KO, AREA_DOT, AREA_ICON, AREA_BG_LIGHT } from '@/lib/area';
 import { scheduleMetronome } from '@/lib/audio';
-import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
-import { getRecording, type Recording } from '@/data/recordings';
+import { usePlaySession } from '@/store/usePlaySession';
 import Loading from '@/components/ui/loading';
 import { useSongScore } from '@/hooks/play/useSongScore';
 import { beatsPerBar, toBars, toLyrics, toDuration } from '@/lib/utils';
@@ -47,10 +46,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
 
   const progress = usePlayProgress({ data: song, focusBar: activeFocusBar });
 
-  const mode = usePlaySession((s) => s.mode);
-  const recordingId = usePlaySession((s) => s.recordingId);
   const skipPermission = usePlaySession((s) => s.skipPermission);
-  const recording = getRecording(recordingId);
   const session_id = usePlaySession((state) => state.session_id);
  
 
@@ -112,8 +108,6 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       key={`play-${activeFocusBar ?? 'normal'}`}
       progress={progress}
       stream={stream}
-      mode={mode}
-      recording={recording}
       focusBar={activeFocusBar}
       focusBars={focusBars}
       focusIdx={focusIdx}
@@ -324,8 +318,6 @@ function CountInOverlay({
 function PlayingView({
   stream,
   progress,
-  mode,
-  recording,
   focusBar,
   focusBars,
   focusIdx,
@@ -341,8 +333,6 @@ function PlayingView({
 }: {
   stream: MediaStream | null;
   progress: ReturnType<typeof usePlayProgress>;
-  mode: PlayMode;
-  recording: Recording | null;
   focusBar: number | null;
   focusBars: number[];
   focusIdx: number;
@@ -356,7 +346,8 @@ function PlayingView({
   beatsPerBarCount: number;
   duration: string[][];
 }) {
-  const isEnsemble = mode === 'ensemble' && !!recording;
+  const { mode, partner } = usePlaySession();
+  const isEnsemble = mode === 'ensemble' && !!partner;
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const {
@@ -434,7 +425,7 @@ function PlayingView({
               {songTitle}
               {isEnsemble && (
                 <span className="ml-2 rounded-full bg-foreground px-2 py-0.5 text-[11px] text-background">
-                  협주 · {recording.playerName}
+                  협주 · {partner.userName}
                 </span>
               )}
             </>
@@ -489,7 +480,7 @@ function PlayingView({
 
             {isEnsemble && (
               <PartnerAudioBar
-                name={recording.playerName}
+                name={partner.userName}
                 progress={elapsed / progress.TOTAL_DURATION}
                 playing={progress.isPlaying && introDone && !isFinished}
               />
@@ -703,8 +694,8 @@ function PartnerAudioBar({
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full bg-foreground transition-[width] duration-100 ease-linear"
-          style={{ width: `${pct}%` }}
+          className="h-full bg-foreground origin-left transition-transform duration-150 ease-out"
+          style={{ transform: `scaleX(${pct / 100})` }}
         />
       </div>
     </div>

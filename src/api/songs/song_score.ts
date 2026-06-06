@@ -8,6 +8,5 @@ export const song_score = async (
 ): Promise<ScoreData> => {
   const res = await api.get<ScoreResponse>(`/songs/${songId}/score`);
 
-  console.log(res);
   return res.data.data;
 };

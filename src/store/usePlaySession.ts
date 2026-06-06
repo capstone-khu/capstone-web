@@ -9,17 +9,29 @@ export type PlayMode = 'solo' | 'ensemble';
 
 type PlaySessionState = {
   mode: PlayMode;
-  recordingId: string | null;
   session_id?: number | null,
+
+  partner: {
+    recordingId: string;
+    userName: string;
+  } | null;
+
   skipPermission: boolean;
   /** 집중 반복 레슨 대상 마디(0-based) 목록. 비어 있으면 일반 연주. 여러 개면 마디 탭으로 전환. */
   focusBars: number[];
+
   /** 혼자 연주 시작 */
   startSolo: (arg0:number) => void;
+
   /** 선택한 녹음과 함께 협주 시작 */
-  startEnsemble: (session_id: number, recordingId: string) => void;
+  startEnsemble: (
+    session_id: number,
+    partner: { recordingId: string; userName: string }
+  ) => void;
+
   /** 같은 설정으로 다시 연주 — 권한 화면만 건너뜀 */
   replay: () => void;
+
   /** 약점 마디(들) 집중 반복 레슨 시작 (마이페이지 등에서) */
   startFocus: (bars: number[]) => void;
 };
@@ -28,14 +40,37 @@ export const usePlaySession = create<PlaySessionState>((set) => ({
   mode: 'solo',
   session_id: null,
   recordingId: null,
+  partner: null,
   skipPermission: false,
   focusBars: [],
-  startSolo: (id) => set({ mode: 'solo', session_id: id, recordingId: null, skipPermission: false, focusBars: [] }),
-  startEnsemble: (session_id, recordingId) =>
-    set({ mode: 'ensemble', session_id, recordingId, skipPermission: false, focusBars: [] }),
+
+  startSolo: (session_id) =>
+    set({
+      mode: 'solo',
+      session_id,
+      partner: null,
+      skipPermission: false,
+      focusBars: [],
+    }),
+  
+  startEnsemble: (session_id, partner) =>
+    set({
+      mode: 'ensemble',
+      session_id,
+      partner,
+      skipPermission: false,
+      focusBars: [],
+    }),
+
   replay: () => set({ skipPermission: true }),
+
   startFocus: (bars) =>
-    set({ mode: 'solo', recordingId: null, skipPermission: true, focusBars: bars }),
+    set({
+      mode: 'solo',
+      partner: null,
+      skipPermission: true,
+      focusBars: bars,
+    }),
 }));
 
 interface IMark {

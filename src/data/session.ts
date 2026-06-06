@@ -1,4 +1,3 @@
-import { prevSessionRecord } from '@/store/usePlaySession';
 /**
  * MVP 세션 더미 데이터 — 분석 윈도우(3마디) 단위 피드백.
  * 화면 기획용. 실제 분석 결과 대신 시나리오 기반 시드.

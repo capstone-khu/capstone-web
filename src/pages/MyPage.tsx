@@ -15,6 +15,7 @@ import { useRecordHistory } from '@/hooks/useRecordHistory';
 import { formatRelativeAndAbsolute } from '@/lib/utils'; 
 import Loading from '@/components/ui/loading';
 import { useDuetVideo } from '@/hooks/useDuetVideo';
+import { usePlaySession } from '@/store/usePlaySession';
 
 
 export default function MyPage() {
@@ -25,6 +26,7 @@ export default function MyPage() {
 
   const [page, setPage] = useState(1);
   const [videoOpen, setVideoOpen] = useState(false);
+  const startFocus = usePlaySession((s) => s.startFocus);
 
   // 연주 이력 조회 데이터
   const { items, size, total, loading: recordLoading } = useRecordHistory();
@@ -47,9 +49,6 @@ export default function MyPage() {
     page * size
   );
 
-  const startFocusLesson = () => {
-    navigate('/play');
-  };
 
   const handleLogout = () => {
     logout();
@@ -125,7 +124,11 @@ export default function MyPage() {
                       {item.focus_measures?.length > 0 && (
                         <RepeatBarCoach
                           focusMeasures={item.focus_measures}
-                          onStart={startFocusLesson}
+                          onStart={() => {
+                            startFocus(item.focus_measures)
+                            // ⚠️ songID가 존재해야 함. 
+                            navigate(`/play/1`)
+                          }}
                         />
                       )}
                     </div>
