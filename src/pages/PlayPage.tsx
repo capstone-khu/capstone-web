@@ -6,9 +6,7 @@ import { Modal } from '@/components/ui/modal';
 import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
-import { LYRICS, SONG } from '@/data/song';
 import {
-  ANALYSIS_WINDOW_BARS,
   FEEDBACK_SEQUENCE,
   currentMarksUpToWindow,
   previousCautionsForWindow,
@@ -23,10 +21,10 @@ import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
 import { getRecording, type Recording } from '@/data/recordings';
 import Loading from '@/components/ui/loading';
 import { useSongScore } from '@/hooks/play/useSongScore';
+import { beatsPerBar, toBars, toLyrics } from '@/lib/utils';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
-import { type SongDataDetail, usePlayProgress } from '@/hooks/play/usePlayProgress';
-import { abortSession } from '@/api/session';
-
+import { usePlayProgress } from '@/hooks/play/usePlayProgress';
+import { type ScoreData, type Pitch } from '@/api/songs/song.type';
 
 export default function PlayPage() {
   const { id } = useParams();
@@ -34,10 +32,10 @@ export default function PlayPage() {
   const { song, loading } = useSongScore(id);
   if (loading || !song ) return <Loading />;
 
-  return <PlayPageInner song={song.song} />;
+  return <PlayPageInner song={song} />;
 }
 
-function PlayPageInner({ song }: { song: SongDataDetail }) {
+function PlayPageInner({ song }: { song: ScoreData }) {
   const [focusIdx, setFocusIdx] = useState(0);
   const navigate = useNavigate();
   const { stream, error, requesting, stage, requestPermission, cleanup } = useMediaPermission();
@@ -45,8 +43,7 @@ function PlayPageInner({ song }: { song: SongDataDetail }) {
   const focusBars = usePlaySession((s) => s.focusBars);
   const activeFocusBar = focusBars.length > 0 ? (focusBars[focusIdx] ?? 0) : null;
 
-  // ✅ 이제 song은 절대 null이 아님
-  const progress = usePlayProgress({ song, focusBar: activeFocusBar });
+  const progress = usePlayProgress({ data: song, focusBar: activeFocusBar });
 
   const mode = usePlaySession((s) => s.mode);
   const recordingId = usePlaySession((s) => s.recordingId);
@@ -60,25 +57,8 @@ function PlayPageInner({ song }: { song: SongDataDetail }) {
     if (skipPermission) requestPermission();
   }, [skipPermission, requestPermission]);
 
-  const handleFinish = () => {
-    cleanup();
-    navigate('/result');
-  };
-
-  const handleExit = async (session_id:number | undefined | null) => {
-    cleanup();
-    if(!session_id) {
-      alert('세션 아이디 저장 오류');
-      return;
-    }
-    const res = await abortSession(session_id);
-    console.log(res);
-    if(!res.success) {
-      alert(res.message);
-    }
-      console.log('세션 중단 완료');
-    navigate('/');
-  };
+  const handleFinish = () => { cleanup(); navigate('/result'); };
+  const handleExit   = () => { cleanup(); navigate('/');       };
 
   if (stage === 'permission') {
     // 다시 연주로 진입했고 아직 에러가 없으면 권한 카드 대신 간단한 준비 로더 노출
@@ -105,7 +85,13 @@ function PlayPageInner({ song }: { song: SongDataDetail }) {
       focusIdx={focusIdx}
       onSelectFocusIdx={setFocusIdx}
       onFinish={handleFinish}
-      onExit={() => handleExit(session_id)}
+      onExit={handleExit}
+      // ✅ API 데이터에서 파생한 값을 아래로 전달
+      songTitle={song.song.title}
+      bars={toBars(song.measures)}
+      lyrics={toLyrics(song.measures)}
+      bpm={song.song.bpm}
+      beatsPerBarCount={beatsPerBar(song.song.time_signature)}
     />
   );
 }
@@ -200,16 +186,15 @@ function PermissionView({
 /* 2. 전주(메트로놈) 카운트인 — 노래방처럼 악보 카드 '안에서' 박자를 센다. */
 
 const INTRO_BEATS = 8;
-const INTRO_ACCENT_EVERY = SONG.beatsPerBar; // 4박마다 강박
 
 /** 전주 메트로놈 오디오 + 박자 카운트 진행. 현재 비트(-1=시작 전)를 반환. */
-function useMetronomeIntro(onDone: () => void) {
+function useMetronomeIntro(bpm: number, beatsPerBarCount: number, onDone: () => void) {
   const [currentBeat, setCurrentBeat] = useState(-1);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
-  const beatSec = 60 / SONG.bpm;
+  const beatSec = 60 / bpm;
   const totalDuration = INTRO_BEATS * beatSec;
 
   useEffect(() => {
@@ -223,7 +208,7 @@ function useMetronomeIntro(onDone: () => void) {
 
     ctx.resume().then(() => {
       startTimeRef.current = ctx.currentTime;
-      scheduleMetronome(ctx, startTimeRef.current, INTRO_BEATS, SONG.bpm, INTRO_ACCENT_EVERY);
+      scheduleMetronome(ctx, startTimeRef.current, INTRO_BEATS, bpm, beatsPerBarCount);
     });
 
     const tick = () => {
@@ -251,9 +236,17 @@ function useMetronomeIntro(onDone: () => void) {
 }
 
 /** 악보 카드 위에 겹쳐지는 카운트인 오버레이 — 큰 박자 숫자 + 8비트 도트. */
-function CountInOverlay({ onDone }: { onDone: () => void }) {
-  const currentBeat = useMetronomeIntro(onDone);
-  const beatInBar = currentBeat < 0 ? 1 : (currentBeat % SONG.beatsPerBar) + 1;
+function CountInOverlay({
+  bpm,
+  beatsPerBarCount,
+  onDone,
+}: {
+  bpm: number;
+  beatsPerBarCount: number;
+  onDone: () => void;
+}) {
+  const currentBeat = useMetronomeIntro(bpm, beatsPerBarCount, onDone);
+  const beatInBar = currentBeat < 0 ? 1 : (currentBeat % beatsPerBarCount) + 1;
 
   return (
     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 rounded-2xl bg-card/85 backdrop-blur-[2px]">
@@ -270,7 +263,7 @@ function CountInOverlay({ onDone }: { onDone: () => void }) {
       {/* 8비트 도트 인디케이터 */}
       <div className="flex items-center gap-3">
         {Array.from({ length: INTRO_BEATS }).map((_, i) => {
-          const isAccent = i % INTRO_ACCENT_EVERY === 0;
+          const isAccent = i % beatsPerBarCount === 0;
           const isActive = i === currentBeat;
           const isPast = i < currentBeat;
           const sizeCls = isAccent ? 'h-3.5 w-3.5' : 'h-2 w-2';
@@ -305,6 +298,11 @@ function PlayingView({
   onSelectFocusIdx,
   onFinish,
   onExit,
+  songTitle,
+  bars,
+  lyrics,
+  bpm,
+  beatsPerBarCount,
 }: {
   stream: MediaStream | null;
   progress: ReturnType<typeof usePlayProgress>;
@@ -316,9 +314,13 @@ function PlayingView({
   onSelectFocusIdx: (idx: number) => void;
   onFinish: () => void;
   onExit: () => void;
+  songTitle: string;
+  bars: Pitch[][];
+  lyrics: string[][];
+  bpm: number;
+  beatsPerBarCount: number;
 }) {
   const isEnsemble = mode === 'ensemble' && !!recording;
-
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const {
@@ -388,7 +390,7 @@ function PlayingView({
             <>마디 {focusBar + 1} 집중 반복</>
           ) : (
             <>
-              {SONG.title}
+              {songTitle}
               {isEnsemble && (
                 <span className="ml-2 rounded-full bg-foreground px-2 py-0.5 text-[11px] text-background">
                   협주 · {recording.playerName}
@@ -463,6 +465,11 @@ function PlayingView({
               introActive={!introDone}
               onIntroDone={handleIntroDone}
               focusBar={focusBar}
+              // ✅ API 파생 데이터 전달
+              bars={bars}
+              lyrics={lyrics}
+              bpm={bpm}
+              beatsPerBarCount={beatsPerBarCount}
             />
           </div>
         </div>
@@ -674,6 +681,10 @@ function SheetStage({
   introActive,
   onIntroDone,
   focusBar,
+  bars,
+  lyrics,
+  bpm,
+  beatsPerBarCount,
 }: {
   currentBarIndex: number;
   progressInBar: number;
@@ -683,6 +694,10 @@ function SheetStage({
   introActive: boolean;
   onIntroDone: () => void;
   focusBar: number | null;
+  bars: Pitch[][];
+  lyrics: string[][];
+  bpm: number;
+  beatsPerBarCount: number;
 }) {
   // 집중 모드 — 틀린 그 한 마디만 크게 보여준다.
   if (focusBar != null) {
@@ -698,18 +713,18 @@ function SheetStage({
             <div className="min-w-0 flex-1">
               <BarView
                 barIndex={focusBar}
-                notes={SONG.bars[focusBar]}
+                notes={bars[focusBar]}
                 isCurrent={!isFinished}
                 progress={isFinished ? 0 : progressInBar}
                 previousMarks={previousMarks.get(focusBar) ?? []}
                 currentMarks={currentMarks.get(focusBar) ?? []}
-                lyrics={LYRICS[focusBar]}
+                lyrics={lyrics[focusBar]}
                 staffClassName="h-28"
               />
             </div>
           </div>
         </div>
-        {introActive && <CountInOverlay onDone={onIntroDone} />}
+        {introActive && <CountInOverlay bpm={bpm} beatsPerBarCount={beatsPerBarCount} onDone={onIntroDone} />}
       </div>
     );
   }
@@ -718,17 +733,15 @@ function SheetStage({
   const BARS_PER_ROW = 4;
   const ROWS_PER_PAGE = 1;
   const BARS_PER_PAGE = BARS_PER_ROW * ROWS_PER_PAGE;
-  const TOTAL_PAGES = Math.ceil(SONG.bars.length / BARS_PER_PAGE);
+  const TOTAL_PAGES   = Math.ceil(bars.length / BARS_PER_PAGE);  
   const pageIndex = Math.min(Math.floor(currentBarIndex / BARS_PER_PAGE), TOTAL_PAGES - 1);
   const pageStart = pageIndex * BARS_PER_PAGE;
-  const verseLabel = currentBarIndex < SONG.bars.length / 2 ? '1절' : '2절';
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <p className="text-sm font-bold">악보</p>
         <div className="flex items-center gap-2.5">
-          <p className="text-xs font-semibold text-muted-foreground">{verseLabel}</p>
           <div className="flex items-center gap-1">
             {Array.from({ length: TOTAL_PAGES }).map((_, i) => (
               <span
@@ -747,8 +760,8 @@ function SheetStage({
       >
         {Array.from({ length: ROWS_PER_PAGE }).map((_, r) => {
           const rowStart = pageStart + r * BARS_PER_ROW;
-          if (rowStart >= SONG.bars.length) return null;
-          const rowBars = SONG.bars.slice(rowStart, rowStart + BARS_PER_ROW);
+          if (rowStart >= bars.length) return null;
+          const rowBars = bars.slice(rowStart, rowStart + BARS_PER_ROW);
           return (
             <div key={r} className="flex w-full items-start gap-3">
               <LaneGutter staffSpacerClassName="h-24" />
@@ -765,7 +778,7 @@ function SheetStage({
                       progress={isCurrent ? progressInBar : 0}
                       previousMarks={previousMarks.get(barIndex) ?? []}
                       currentMarks={currentMarks.get(barIndex) ?? []}
-                      lyrics={LYRICS[barIndex]}
+                      lyrics={lyrics[barIndex]}
                       staffClassName="h-24"
                     />
                   );
@@ -776,7 +789,7 @@ function SheetStage({
         })}
       </div>
 
-      {introActive && <CountInOverlay onDone={onIntroDone} />}
+      {introActive && <CountInOverlay bpm={bpm} beatsPerBarCount={beatsPerBarCount} onDone={onIntroDone} />}
     </div>
   );
 }
