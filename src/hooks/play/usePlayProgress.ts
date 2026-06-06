@@ -3,19 +3,11 @@
 
 import { scheduleBarsLoop, scheduleSong } from "@/lib/audio";
 import { useRef, useState, useEffect } from "react";
+import { type ScoreData } from "@/api/songs/song.type";
 
-export interface SongDataDetail {
-    id: number;
-    number: number;
-    title: string;
-
-    bpm: number;
-    time_signature: string;
-    total_measures: number;
-}
 
 interface PlayProgressInput {
-    song: SongDataDetail;
+    data: ScoreData;
     focusBar?: number | null; 
 }
 
@@ -46,17 +38,16 @@ interface PlayProgressReturn {
 /** 분석 단위: 3마디 = 한 윈도우. 한 윈도우에 하나의 피드백/마킹이 적용됨. */
 export const ANALYSIS_WINDOW_BARS = 3;
 
-export const usePlayProgress = ({ song, focusBar }: PlayProgressInput): PlayProgressReturn => {
+export const usePlayProgress = ({ data, focusBar }: PlayProgressInput): PlayProgressReturn => {
     // song이 없으면 훅 내부 계산 자체를 막음
-    if (!song) throw new Error('usePlayProgress: song은 null이 될 수 없습니다');
-    console.log(song);
-    const beatsPerBar = Number(song.time_signature.split("/")[0]);
-    const TOTAL_BARS = song.total_measures;
+    if (!data) throw new Error('usePlayProgress: song은 null이 될 수 없습니다');
+    const beatsPerBar = Number(data.song.time_signature.split("/")[0]);
+    const TOTAL_BARS = data.song.total_measures;
     const FOCUS_LOOPS = 5;
 
 
     // 악보 데이터에서 연주 분석에 필요한 여러 파생값들을 계산
-    const BAR_DURATION = (60 / song.bpm) * beatsPerBar;
+    const BAR_DURATION = (60 / data.song.bpm) * beatsPerBar;
     const WINDOW_DURATION = BAR_DURATION * ANALYSIS_WINDOW_BARS;
     const TOTAL_WINDOWS = Math.ceil(TOTAL_BARS / ANALYSIS_WINDOW_BARS);
     const TOTAL_DURATION = BAR_DURATION * TOTAL_BARS;
@@ -134,9 +125,10 @@ export const usePlayProgress = ({ song, focusBar }: PlayProgressInput): PlayProg
           ctx.resume().then(() => {
             songStartTimeRef.current = ctx.currentTime;
             if (focused) {
-              scheduleBarsLoop(ctx, songStartTimeRef.current, phraseStart, phraseEnd, FOCUS_LOOPS);
+              // ✅ data 추가 — 단, 여기서 SongScoreDataDetail이 아니라 ScoreData 전체가 필요
+              scheduleBarsLoop(ctx, songStartTimeRef.current, phraseStart, phraseEnd, FOCUS_LOOPS, data);
             } else {
-              scheduleSong(ctx, songStartTimeRef.current);
+              scheduleSong(ctx, songStartTimeRef.current, data);
             }
           });
         }

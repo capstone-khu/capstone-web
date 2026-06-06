@@ -1,4 +1,4 @@
-import { PITCH_Y, type Bar as BarType } from '@/data/song';
+import { PITCH_Y, type Bar as BarType, type Pitch } from '@/api/songs/song.type';
 import { markBorderClass, markClass, type Mark } from '@/data/session';
 import { type Area, AREA_KO, AREA_DOT } from '@/lib/area';
 
@@ -57,6 +57,10 @@ export function BarView({
           <line x1="108" y1="15" x2="108" y2="43" stroke="hsl(var(--border))" strokeWidth="0.5" />
 
           {notes.map((p, i) => {
+            // ✅ PITCH_Y에 없는 pitch 방어
+            const y = PITCH_Y[p as Pitch];
+            if (y === undefined) return null;
+            
             const isActive = isCurrent && i === activeNote;
 
             const noteColor = isActive
@@ -65,12 +69,12 @@ export function BarView({
 
             return (
               <g key={i}>
-                {p === 'C4' && (
+                {y >= 50 && (
                   <line
                     x1={noteX(i) - 5}
-                    y1="50"
+                    y1={y}
                     x2={noteX(i) + 5}
-                    y2="50"
+                    y2={y}
                     stroke={noteColor}
                     strokeWidth="0.8"
                   />
