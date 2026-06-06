@@ -43,7 +43,7 @@ export const usePlayProgress = ({ data, focusBar }: PlayProgressInput): PlayProg
     if (!data) throw new Error('usePlayProgress: song은 null이 될 수 없습니다');
     const beatsPerBar = Number(data.song.time_signature.split("/")[0]);
     const TOTAL_BARS = data.song.total_measures;
-    const FOCUS_LOOPS = 5;
+    const FOCUS_LOOPS = 7;
 
 
     // 악보 데이터에서 연주 분석에 필요한 여러 파생값들을 계산
