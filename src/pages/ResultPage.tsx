@@ -31,22 +31,22 @@ export default function ResultPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const mode = usePlaySession((s) => s.mode);
-  const recordingId = usePlaySession((s) => s.recordingId);
+  const session_id = usePlaySession((s) => s.session_id);
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
   const [page, setPage] = useState(0);
 
-  // 마이페이지 이력에서 진입하면 state.recordingId가 실린다 → '과거 기록' 열람 모드.
+  // 마이페이지 이력에서 진입하면 state.session_id가 실린다 → '과거 기록' 열람 모드.
   // 연주 직후(/play)에서 오면 state가 없다 → '방금 끝난 연주' 모드.
-  const historyId = (location.state as { recordingId?: string } | null)?.recordingId ?? null;
+  const historyId = (location.state as { session_id?: string } | null)?.session_id ?? null;
   const historyRec = historyId ? getRecording(historyId) : null;
   const isHistory = !!historyRec;
 
   // 협주 배지는 방금 끝난 연주에만 (과거 내 기록은 단독 연주).
-  const partner = !isHistory && mode === 'ensemble' ? getRecording(recordingId) : null;
+  const partner = !isHistory && mode === 'ensemble' ? getRecording(String(session_id)) : null;
 
-  // '다시 연주' 대신, 세션 후 AI 코치 디브리핑으로 이동. 과거 기록 맥락이면 그 recordingId를 넘긴다.
+  // '다시 연주' 대신, 세션 후 AI 코치 디브리핑으로 이동. 과거 기록 맥락이면 그 session_id를 넘긴다.
   const goCoach = () =>
-    navigate('/coach', { state: historyId ? { recordingId: historyId } : undefined });
+    navigate('/coach', { state: historyId ? { session_id: historyId } : undefined });
 
   // 방금 끝난 연주 = 라이브 피드백 시퀀스 그대로. 과거 기록 = 그 기록의 요약으로부터 분포 생성.
   const currentMarks = useMemo(
