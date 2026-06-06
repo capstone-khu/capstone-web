@@ -25,7 +25,7 @@ import Loading from '@/components/ui/loading';
 import { useSongScore } from '@/hooks/play/useSongScore';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { type SongDataDetail, usePlayProgress } from '@/hooks/play/usePlayProgress';
-import { abortSession } from '@/api/session';
+import { abortSession, completeSession } from '@/api/session';
 import { prevSessionRecord } from '@/store/usePlaySession';
 
 
@@ -61,9 +61,18 @@ function PlayPageInner({ song }: { song: SongDataDetail }) {
     if (skipPermission) requestPermission();
   }, [skipPermission, requestPermission]);
 
-  const handleFinish = () => {
-    cleanup();
-    navigate('/result');
+  const handleFinish = async () => {
+    try {
+      if (session_id) {
+        await completeSession(session_id);
+        console.log('세션 종료');
+      }
+    } catch (e) {
+      console.error('session complete failed', e);
+    } finally {
+      cleanup();
+      navigate('/result');
+    }
   };
 
   const handleExit = async (session_id:number | undefined | null) => {

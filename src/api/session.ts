@@ -40,3 +40,14 @@ export const getPreviousMarking = async (session_id:number) => {
     console.log(response);
     return response.data;
 }
+
+export const completeSession = async (session_id: number) => {
+  console.log(`complete session id: ${session_id}`);
+
+  const response = await api.post(
+    `/sessions/${session_id}/complete`
+  );
+
+  console.log(response);
+  return response.data;
+};
