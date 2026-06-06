@@ -17,7 +17,7 @@ import {
 } from '@/data/session';
 import { AREA_KO, AREA_TEXT, AREA_DOT } from '@/lib/area';
 import { getRecording } from '@/data/recordings';
-import { usePlaySession } from '@/store/usePlaySession';
+import { usePlaySession, prevSessionRecord } from '@/store/usePlaySession';
 
 const TOTAL_WINDOWS = Math.ceil(SONG.bars.length / ANALYSIS_WINDOW_BARS);
 
@@ -58,7 +58,12 @@ export default function ResultPage() {
         : currentMarksUpToWindow(TOTAL_WINDOWS - 1),
     [historyRec],
   );
-  const previousMarks = useMemo(() => previousMarksByBar(), []);
+  const prev_measures = prevSessionRecord((state) => state.measures);
+  const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => ({
+    window: m.measure_index,
+    marks: m.markings.map((mk) => ({ area: mk.domain, message: mk.feedbck })),
+  }));
+  const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
 
   return (
     <div className="min-h-screen bg-background">

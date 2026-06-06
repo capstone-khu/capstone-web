@@ -6,7 +6,7 @@ import { BottomSheet } from '@/components/ui/sheet';
 import { AppHeader } from '@/components/AppHeader';
 import { type Song, } from '@/api/songs/song.type';
 import { useAuthStore } from '@/store/useAuthStore';
-import { usePlaySession } from '@/store/usePlaySession';
+import { usePlaySession, prevSessionRecord } from '@/store/usePlaySession';
 import Loading from '@/components/ui/loading';
 import { useSongList } from '@/hooks/useSongList';
 import { createSession, getPreviousMarking } from '@/api/session';
@@ -15,6 +15,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const startSolo = usePlaySession((s) => s.startSolo);
+  const setMeasures = prevSessionRecord((state) => state.setMeasures);
   const [selected, setSelected] = useState<Song | null>(null);
 
   // Song List 불러오기
@@ -40,6 +41,9 @@ export default function HomePage() {
       }
       else {
         console.log(`prev data:`, prev);
+        if(prev.data.measures.length) {
+          setMeasures(prev.data.measures);
+        }
         navigate(`/play/${id}`);
       }
     }

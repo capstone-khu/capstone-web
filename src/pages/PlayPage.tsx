@@ -26,6 +26,7 @@ import { useSongScore } from '@/hooks/play/useSongScore';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { type SongDataDetail, usePlayProgress } from '@/hooks/play/usePlayProgress';
 import { abortSession } from '@/api/session';
+import { prevSessionRecord } from '@/store/usePlaySession';
 
 
 export default function PlayPage() {
@@ -347,15 +348,20 @@ function PlayingView({
     [currentWindowIndex],
   );
 
-  const previousMarks = useMemo(() => previousMarksByBar(), []);
-
   const currentFeedbacks = useMemo(
     () => FEEDBACK_SEQUENCE[currentWindowIndex] ?? [],
     [currentWindowIndex],
   );
 
+  const prev_measures = prevSessionRecord((state) => state.measures);
+
+  const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => (
+    {window: m.measure_index, marks: m.markings.map((mk => ({area: mk.domain, message: mk.feedbck})))}
+  ))
+
+  const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
   const previousCautions = useMemo(
-    () => previousCautionsForWindow(currentWindowIndex),
+    () => previousCautionsForWindow(currentWindowIndex, PREVIOUS_SESSION_MARKS),
     [currentWindowIndex],
   );
 

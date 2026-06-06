@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Area } from '@/lib/area';
 
 /**
  * 연주 세션 설정 — /play 진입 전에 진입점(홈/협주 선택/결과)에서 세팅한다.
@@ -36,3 +37,22 @@ export const usePlaySession = create<PlaySessionState>((set) => ({
   startFocus: (bars) =>
     set({ mode: 'solo', recordingId: null, skipPermission: true, focusBars: bars }),
 }));
+
+interface IMark {
+  domain: Area,
+  action_id: string,
+  feedbck: string,
+}
+interface IMeasure {
+  measure_index: number,
+  markings: IMark[]
+}
+interface IprevRecord {
+  measures: IMeasure[],
+  setMeasures: (m: IMeasure[]) => void;
+}
+
+export const prevSessionRecord = create<IprevRecord>((set) => ({
+  measures: [],
+  setMeasures: (m: IMeasure[]) => set({measures: m}),
+}))

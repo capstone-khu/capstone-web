@@ -1,3 +1,4 @@
+import { prevSessionRecord } from '@/store/usePlaySession';
 /**
  * MVP 세션 더미 데이터 — 분석 윈도우(3마디) 단위 피드백.
  * 화면 기획용. 실제 분석 결과 대신 시나리오 기반 시드.
@@ -6,7 +7,7 @@ import { SONG } from '@/data/song';
 import type { Area } from '@/lib/area';
 
 export type Severity = 'mild' | 'major';
-export type Mark = { area: Area; severity: Severity; message?: string };
+export type Mark = { area: Area; severity?: Severity; message?: string };
 
 export type Feedback =
   | { tone: 'normal'; area: Area; message: string; mark?: Mark; reward?: number }
@@ -17,14 +18,16 @@ export type Feedback =
 export const ANALYSIS_WINDOW_BARS = 3;
 
 /** 이전 세션 마킹 — 윈도우 인덱스 기준. 그 윈도우의 모든 마디에 펼쳐서 표시됨. */
-export const PREVIOUS_SESSION_MARKS: Array<{ window: number; marks: Mark[] }> = [
-  { window: 1, marks: [{ area: 'pitch', severity: 'mild' }] },
-  { window: 2, marks: [{ area: 'pitch', severity: 'major' }] },
-  { window: 3, marks: [{ area: 'rhythm', severity: 'mild' }] },
-  { window: 4, marks: [{ area: 'rhythm', severity: 'major' }, { area: 'posture', severity: 'mild' }] },
-  { window: 5, marks: [{ area: 'posture', severity: 'mild' }] },
-  { window: 6, marks: [{ area: 'posture', severity: 'major' }] },
-];
+
+
+// : Array<{ window: number; marks: Mark[] }> = [
+//   { window: 1, marks: [{ area: 'pitch', severity: 'mild' }] },
+//   { window: 2, marks: [{ area: 'pitch', severity: 'major' }] },
+//   { window: 3, marks: [{ area: 'rhythm', severity: 'mild' }] },
+//   { window: 4, marks: [{ area: 'rhythm', severity: 'major' }, { area: 'posture', severity: 'mild' }] },
+//   { window: 5, marks: [{ area: 'posture', severity: 'mild' }] },
+//   { window: 6, marks: [{ area: 'posture', severity: 'major' }] },
+// ];
 
 /**
  * 윈도우 진입 시점에 표시되는 더미 피드백 (총 8개 = 24마디 / 3마디).
@@ -165,27 +168,26 @@ const SAMPLE_MESSAGE: Record<Area, Record<Severity, string>> = {
   },
 };
 
-export type Caution = { area: Area; severity: Severity; message: string };
+export type Caution = { area: Area; message: string };
 
 /** 현재 윈도우의 '지난 연주' 주의 — 이전 세션 마킹을 대표 문구와 함께 반환. */
-export function previousCautionsForWindow(window: number): Caution[] {
-  const entry = PREVIOUS_SESSION_MARKS.find((e) => e.window === window);
+export function previousCautionsForWindow(window: number, PREVIOUS_SESSION_MARKS:any): Caution[] {
+  const entry = PREVIOUS_SESSION_MARKS.find((e:any) => e.window === window);
   if (!entry) return [];
-  return entry.marks.map((m) => ({
+  return entry.marks.map((m:any) => ({
     area: m.area,
-    severity: m.severity,
-    message: SAMPLE_MESSAGE[m.area][m.severity],
+    message: m.message,
   }));
 }
 
 /** 이전 세션 마킹을 bar 인덱스로 키잉한 Map — 윈도우 마킹을 그 윈도우의 모든 마디로 펼침 */
-export function previousMarksByBar(): Map<number, Mark[]> {
+export function previousMarksByBar(PREVIOUS_SESSION_MARKS:any): Map<number, Mark[]> {
   const map = new Map<number, Mark[]>();
   for (const entry of PREVIOUS_SESSION_MARKS) {
     const startBar = entry.window * ANALYSIS_WINDOW_BARS;
-    const marks = entry.marks.map((m) => ({
+    const marks = entry.marks.map((m:any) => ({
       ...m,
-      message: SAMPLE_MESSAGE[m.area][m.severity],
+      message: m.message,
     }));
     for (let b = startBar; b < startBar + ANALYSIS_WINDOW_BARS; b++) {
       map.set(b, marks);
