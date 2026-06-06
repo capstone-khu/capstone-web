@@ -44,9 +44,9 @@ export default function EnsemblePage() {
     const sessionId = res.data.session_id
 
     startEnsemble(sessionId, {
-    recordingId: partner.recording_id,
-    userName: partner.user_name,
-  });
+      recordingId: partner.recording_id,
+      userName: partner.user_name,
+    });
 
   timerRef.current = window.setTimeout(() => {
     navigate(`/play/${id}`);
