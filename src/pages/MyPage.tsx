@@ -15,6 +15,7 @@ import { type RecordingItem, type RecordingItemSummary } from '@/api/history';
 import { useRecordHistory } from '@/hooks/useRecordHistory';
 import { formatRelativeAndAbsolute } from '@/lib/utils'; 
 import Loading from '@/components/ui/loading';
+import { useDuetVideo } from '@/hooks/useDuetVideo';
 
 
 export default function MyPage() {
@@ -26,11 +27,22 @@ export default function MyPage() {
   const startFocus = usePlaySession((s) => s.startFocus);
 
   const [page, setPage] = useState(1);
-  const [videoRec, setVideoRec] = useState<RecordingItem | null>(null);
+  const [videoOpen, setVideoOpen] = useState(false);
 
-  const { items, size, total, loading } = useRecordHistory();
-  if (!items || loading) return <Loading />;
+  // 연주 이력 조회 데이터
+  const { items, size, total, loading: recordLoading } = useRecordHistory();
+  // 협주 영상 조회 데이터 
+  const {
+    data: duetVideo,
+    loading: videoLoading,
+    error,
+    load,
+    reset,
+  } = useDuetVideo();
 
+  if (!items || recordLoading) return <Loading />;
+
+  
   // pagination 연산 
   const pageCount = Math.ceil(total / size);
   const pagedItems = items.slice(
@@ -46,6 +58,13 @@ export default function MyPage() {
     logout();
     navigate('/login', { replace: true });
   };
+
+  const handleOpenDuetVideo = async (duetCompositeId?: number) => {
+    if (!duetCompositeId) return;
+
+    await load(duetCompositeId);
+    setVideoOpen(true)
+  }
 
   // 내 기록은 단독 연주 결과로 표시 — 협주 배지가 남지 않도록 모드 초기화.
   // 어느 기록을 열었는지 결과 화면에 넘겨 '과거 기록' 맥락으로 보여준다.
@@ -120,8 +139,7 @@ export default function MyPage() {
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        // 영상 보기 duet-videos 연동 
-                        onClick={() => {}}
+                        onClick={() => handleOpenDuetVideo(item.duet_composite_id)}
                       >
                         협주 영상 보기
                       </Button>
@@ -168,9 +186,38 @@ export default function MyPage() {
         </section>
       </main>
 
-      {/* <Modal open={!!videoRec} onClose={() => setVideoRec(null)} title="협주 영상">
-        {videoRec && <EnsembleVideoPlayer key={videoRec.id} rec={videoRec} />}
-      </Modal> */}
+        <Modal
+          open={videoOpen}
+          onClose={() => {
+            setVideoOpen(false);
+            reset();
+          }}
+          title="협주 영상"
+        >
+          {videoLoading && <Loading />}
+
+          {error && (
+            <div className="p-4 text-center text-red-500">
+              {error}
+            </div>
+          )}
+
+          {duetVideo && (
+          <div className="space-y-3 p-4">
+
+          <div className="text-sm text-muted-foreground">
+              {duetVideo.partner_name}님과  「 {duetVideo.song_title} 」을 협주한 영상입니다.
+            </div>
+            <video
+              controls
+              className="w-full rounded-lg"
+              src={duetVideo.composite_video_url}
+            />
+
+            
+          </div>
+        )}      
+      </Modal>
     </div>
   );
 }
@@ -229,79 +276,3 @@ function RepeatBarCoach({
     </Card>
   );
 }
-
-/** 협주 영상 플레이어(mock) — 좌우 분할 화면 + 재생/일시정지·진행바. 실제 미디어 없이 진행만 흉내. */
-// function EnsembleVideoPlayer({ rec }: { rec: Recording }) {
-//   const partner = rec.ensemble?.partnerName ?? '';
-//   const [playing, setPlaying] = useState(false);
-//   const [progress, setProgress] = useState(0); // 0..1
-
-//   useEffect(() => {
-//     if (!playing) return;
-//     const id = window.setInterval(() => {
-//       setProgress((p) => {
-//         const next = p + 0.25 / rec.durationSec;
-//         if (next >= 1) {
-//           setPlaying(false);
-//           return 1;
-//         }
-//         return next;
-//       });
-//     }, 250);
-//     return () => window.clearInterval(id);
-//   }, [playing, rec.durationSec]);
-
-//   const toggle = () => {
-//     if (progress >= 1) setProgress(0);
-//     setPlaying((v) => !v);
-//   };
-
-//   return (
-//     <div className="space-y-3 p-5">
-//       <div className="relative overflow-hidden rounded-xl bg-foreground">
-//         <div className="grid aspect-video grid-cols-2 divide-x divide-background/20">
-//           <div className="flex items-center justify-center text-sm font-semibold text-background/70">
-//             나
-//           </div>
-//           <div className="flex items-center justify-center text-sm font-semibold text-background/70">
-//             {partner}
-//           </div>
-//         </div>
-//         <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-background/20 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur">
-//           협주 · {partner}
-//         </div>
-//       </div>
-
-//       {/* 컨트롤 바 */}
-//       <div className="flex items-center gap-3">
-//         <button
-//           type="button"
-//           onClick={toggle}
-//           aria-label={playing ? '일시정지' : '재생'}
-//           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background"
-//         >
-//           {playing ? (
-//             <PauseIcon className="h-4 w-4" />
-//           ) : (
-//             <PlayIcon className="h-4 w-4 translate-x-0.5" />
-//           )}
-//         </button>
-//         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-//           <div
-//             className="h-full bg-foreground transition-[width] duration-200 ease-linear"
-//             style={{ width: `${progress * 100}%` }}
-//           />
-//         </div>
-//         <span className="tabular shrink-0 text-xs text-muted-foreground">
-//           {formatDuration(Math.round(progress * rec.durationSec))} / {formatDuration(rec.durationSec)}
-//         </span>
-//       </div>
-
-//       <p className="text-center text-xs text-muted-foreground">
-//         {rec.songTitle} · 협주 영상 (좌: 나 / 우: {partner})
-//       </p>
-//     </div>
-//   );
-// }
-
-
