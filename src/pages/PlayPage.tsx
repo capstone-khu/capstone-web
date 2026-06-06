@@ -21,7 +21,7 @@ import { usePlaySession, type PlayMode } from '@/store/usePlaySession';
 import { getRecording, type Recording } from '@/data/recordings';
 import Loading from '@/components/ui/loading';
 import { useSongScore } from '@/hooks/play/useSongScore';
-import { beatsPerBar, toBars, toLyrics } from '@/lib/utils';
+import { beatsPerBar, toBars, toLyrics, toDuration } from '@/lib/utils';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { usePlayProgress } from '@/hooks/play/usePlayProgress';
 import { type ScoreData, type Pitch } from '@/api/songs/song.type';
@@ -92,6 +92,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       lyrics={toLyrics(song.measures)}
       bpm={song.song.bpm}
       beatsPerBarCount={beatsPerBar(song.song.time_signature)}
+      duration={toDuration(song.measures)}
     />
   );
 }
@@ -303,6 +304,7 @@ function PlayingView({
   lyrics,
   bpm,
   beatsPerBarCount,
+  duration,
 }: {
   stream: MediaStream | null;
   progress: ReturnType<typeof usePlayProgress>;
@@ -319,6 +321,7 @@ function PlayingView({
   lyrics: string[][];
   bpm: number;
   beatsPerBarCount: number;
+  duration: string[][];
 }) {
   const isEnsemble = mode === 'ensemble' && !!recording;
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -470,6 +473,7 @@ function PlayingView({
               lyrics={lyrics}
               bpm={bpm}
               beatsPerBarCount={beatsPerBarCount}
+              duration={duration}
             />
           </div>
         </div>
@@ -685,6 +689,7 @@ function SheetStage({
   lyrics,
   bpm,
   beatsPerBarCount,
+  duration,
 }: {
   currentBarIndex: number;
   progressInBar: number;
@@ -698,6 +703,7 @@ function SheetStage({
   lyrics: string[][];
   bpm: number;
   beatsPerBarCount: number;
+  duration: string[][];
 }) {
   // 집중 모드 — 틀린 그 한 마디만 크게 보여준다.
   if (focusBar != null) {
@@ -720,6 +726,7 @@ function SheetStage({
                 currentMarks={currentMarks.get(focusBar) ?? []}
                 lyrics={lyrics[focusBar]}
                 staffClassName="h-28"
+                duration={duration[focusBar]}
               />
             </div>
           </div>
@@ -780,6 +787,7 @@ function SheetStage({
                       currentMarks={currentMarks.get(barIndex) ?? []}
                       lyrics={lyrics[barIndex]}
                       staffClassName="h-24"
+                      duration={duration[barIndex]}
                     />
                   );
                 })}
