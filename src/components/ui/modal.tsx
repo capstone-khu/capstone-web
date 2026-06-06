@@ -33,7 +33,7 @@ export function Modal({ open, onClose, title, children }: Props) {
       aria-modal="true"
     >
       <div
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-card shadow-modal"
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-card shadow-modal"
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
