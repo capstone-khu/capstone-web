@@ -25,6 +25,7 @@ import { beatsPerBar, toBars, toLyrics, toDuration } from '@/lib/utils';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { usePlayProgress } from '@/hooks/play/usePlayProgress';
 import { type ScoreData, type Pitch } from '@/api/songs/song.type';
+import { abortSession, completeSession } from '@/api/session';
 
 export default function PlayPage() {
   const { id } = useParams();
@@ -57,8 +58,37 @@ function PlayPageInner({ song }: { song: ScoreData }) {
     if (skipPermission) requestPermission();
   }, [skipPermission, requestPermission]);
 
-  const handleFinish = () => { cleanup(); navigate('/result'); };
-  const handleExit   = () => { cleanup(); navigate('/');       };
+  // 세션 종료
+  const handleFinish = async () => {
+    try {
+      if (session_id) {
+        await completeSession(session_id);
+      }
+    } catch (e) {
+      console.error('session complete failed', e);
+    } finally {
+      cleanup();
+      navigate('/result');
+    }
+  };
+  
+  // 세션 중도 종료
+  const handleExit   = async (session_id : number | undefined | null) => {
+    if(!session_id) {
+      alert('세션 아이디 저장 오류');
+      return;
+    }
+    const res = await abortSession(session_id);
+    console.log(res);
+
+    if(!res.success) {
+      alert(res.message);
+    }
+    
+    console.log('세션 중단 완료');
+    cleanup();
+    navigate('/');
+  };
 
   if (stage === 'permission') {
     // 다시 연주로 진입했고 아직 에러가 없으면 권한 카드 대신 간단한 준비 로더 노출
@@ -68,7 +98,10 @@ function PlayPageInner({ song }: { song: ScoreData }) {
         requesting={requesting}
         error={error}
         onStart={requestPermission}
-        onBack={() => navigate('/')}
+        onBack={() => {
+          handleExit(session_id);
+          navigate('/');
+        }}
       />
     );
   }
@@ -85,8 +118,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       focusIdx={focusIdx}
       onSelectFocusIdx={setFocusIdx}
       onFinish={handleFinish}
-      onExit={handleExit}
-      // ✅ API 데이터에서 파생한 값을 아래로 전달
+      onExit={() => handleExit(session_id)}      
       songTitle={song.song.title}
       bars={toBars(song.measures)}
       lyrics={toLyrics(song.measures)}
