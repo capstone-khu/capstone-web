@@ -29,18 +29,29 @@ export default function EnsemblePage() {
   // 협주 상대 선택 → 음원 로딩 인디케이터를 잠깐 보여준 뒤 연주로 진입.
   const onSelect = async (partner: Partner) => {
     setSelectedPartner(partner);
-    const res = await createSession({song_id: Number(id), mode: 'duet', partner_recording_id: Number(partner.recording_id)})
-    console.log(res);
-    if(!res.success) {
+
+    const res = await createSession({
+      song_id: Number(id), 
+      mode: 'duet', 
+      partner_recording_id: Number(partner.recording_id),
+    })
+
+    if (!res.success) {
       alert(res.message);
+      return;
     }
-    else {
-      timerRef.current = window.setTimeout(() => {
-        startEnsemble(res.data.session_id, partner.recording_id);
-        navigate(`/play/${id}`);
-      }, 1400);
-    }
-  };
+
+    const sessionId = res.data.session_id
+
+    startEnsemble(sessionId, {
+    recordingId: partner.recording_id,
+    userName: partner.user_name,
+  });
+
+  timerRef.current = window.setTimeout(() => {
+    navigate(`/play/${id}`);
+  }, 1200);
+};
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
