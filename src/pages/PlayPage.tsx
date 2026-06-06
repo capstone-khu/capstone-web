@@ -30,7 +30,6 @@ export default function PlayPage() {
   const { id } = useParams();
   // 선택한 곡 정보 조회
   const { song, loading } = useSongScore(id);
-  
   if (loading || !song ) return <Loading />;
 
   return <PlayPageInner song={song} />;
@@ -50,6 +49,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
   const recordingId = usePlaySession((s) => s.recordingId);
   const skipPermission = usePlaySession((s) => s.skipPermission);
   const recording = getRecording(recordingId);
+  const session_id = usePlaySession((state) => state.session_id);
  
 
   // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
@@ -373,6 +373,7 @@ function PlayingView({
     }
     pause();
     setShowExitConfirm(true);
+    return;
   };
 
   const handleTogglePlay = () => {
@@ -552,7 +553,9 @@ function PlayingView({
 
       <Modal
         open={showExitConfirm}
-        onClose={() => setShowExitConfirm(false)}
+        onClose={() => {
+          setShowExitConfirm(false)
+        }}
         title="연주를 종료할까요?"
       >
         <div className="space-y-5 p-6">

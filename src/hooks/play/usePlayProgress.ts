@@ -97,7 +97,7 @@ export const usePlayProgress = ({ data, focusBar }: PlayProgressInput): PlayProg
             );
 
     // 일시정지/재개 — AudioContext의 suspend/resume과 연동
-    const pause = () => {
+    const pause = async () => {
         setIsPlaying(false);
     };
 

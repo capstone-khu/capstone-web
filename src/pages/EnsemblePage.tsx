@@ -7,6 +7,7 @@ import { useSongPartners } from '@/hooks/useSongPartners';
 import { type Partner } from '@/api/songs/song.type';
 import { formatRelativeAndAbsolute } from '@/lib/utils'
 import Loading from '@/components/ui/loading';
+import { createSession } from '@/api/session';
 
 export default function EnsemblePage() {
   const { id } = useParams();
@@ -26,13 +27,19 @@ export default function EnsemblePage() {
 
 
   // 협주 상대 선택 → 음원 로딩 인디케이터를 잠깐 보여준 뒤 연주로 진입.
-  const onSelect = (partner: Partner) => {
+  const onSelect = async (partner: Partner) => {
     setSelectedPartner(partner);
-
-    timerRef.current = window.setTimeout(() => {
-      startEnsemble(partner.recording_id);
-      navigate(`/play/${id}`);
-    }, 1400);
+    const res = await createSession({song_id: Number(id), mode: 'duet', partner_recording_id: Number(partner.recording_id)})
+    console.log(res);
+    if(!res.success) {
+      alert(res.message);
+    }
+    else {
+      timerRef.current = window.setTimeout(() => {
+        startEnsemble(res.data.session_id, partner.recording_id);
+        navigate(`/play/${id}`);
+      }, 1400);
+    }
   };
 
   return (
