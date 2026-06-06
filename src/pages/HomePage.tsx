@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { usePlaySession } from '@/store/usePlaySession';
 import Loading from '@/components/ui/loading';
 import { useSongList } from '@/hooks/useSongList';
-import { createSession } from '@/api/session';
+import { createSession, getPreviousMarking } from '@/api/session';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -34,7 +34,14 @@ export default function HomePage() {
     }
     else {
       startSolo(Number(res.data.session_id));
-      navigate(`/play/${id}`);
+      const prev = await getPreviousMarking(res.data.session_id);
+      if(!prev.success) {
+        alert(prev.message);
+      }
+      else {
+        console.log(`prev data:`, prev);
+        navigate(`/play/${id}`);
+      }
     }
   };
 

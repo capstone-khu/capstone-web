@@ -33,3 +33,10 @@ export const abortSession = async (session_id:number) => {
     console.log(response);
     return response.data;
 }
+
+export const getPreviousMarking = async (session_id:number) => {
+    console.log(`session id: ${session_id}`);
+    const response = await api.get(`/sessions/${session_id}/previous-markings`);
+    console.log(response);
+    return response.data;
+}
