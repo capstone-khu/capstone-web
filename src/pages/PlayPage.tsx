@@ -25,7 +25,7 @@ import { beatsPerBar, toBars, toLyrics, toDuration } from '@/lib/utils';
 import { useMediaPermission } from '@/hooks/play/useMediaPermission';
 import { usePlayProgress } from '@/hooks/play/usePlayProgress';
 import { type ScoreData, type Pitch } from '@/api/songs/song.type';
-import { abortSession, completeSession, completeSession } from '@/api/session';
+import { abortSession, completeSession} from '@/api/session';
 import { prevSessionRecord } from '@/store/usePlaySession';
 
 export default function PlayPage() {
