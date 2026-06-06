@@ -1,12 +1,12 @@
 import { api } from "./client";
 
-interface createRequest {
+interface createSessionRequest {
     song_id: number,
     mode: string,
     partner_recording_id?: number,
 }
 
-interface createResponse {
+interface createSessionResponse {
     "success":boolean,
     "status":number,
     "message":string,
@@ -21,15 +21,28 @@ interface createResponse {
     }
 }
 
-export const createSession = async (data:createRequest):Promise<createResponse> => {
+export const createSession = async (data : createSessionRequest) : Promise<createSessionResponse> => {
     const response = await api.post('/sessions', data);
     console.log(response);
     return response.data;
 }
 
-export const abortSession = async (session_id:number) => {
+// 세션 중도 종료
+export const abortSession = async (session_id : number) => {
     console.log(`session id: ${session_id}`)
     const response = await api.post(`/sessions/${session_id}/abort`);
     console.log(response);
     return response.data;
 }
+
+// 세션 종료 
+export const completeSession = async (session_id: number) => {
+  console.log(`complete session id: ${session_id}`);
+
+  const response = await api.post(
+    `/sessions/${session_id}/complete`
+  );
+
+  console.log(response);
+  return response.data;
+};
