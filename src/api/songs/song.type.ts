@@ -24,21 +24,23 @@ export type Pitch = 'C4' | 'D4' | 'E4' | 'F4' | 'F#4' | 'G4' | 'A4' | 'B4'; // F
 export type Bar = Pitch[];
 
 /**
- * 5선보 (treble clef) 기준 음표 Y 좌표.
- * staff 라인: y = 15, 22, 29, 36, 43 (위→아래 = F5, D5, B4, G4, E4)
+ * 오선 라인 기준: E4=43(5선), G4=36(4선), B4=29(3선), D5=22(2선), F5=15(1선)
+ *  공간: F4=39.5, A4=32.5, C5=25.5 / 가선 아래: D4=46.5, C4=50
  */
+/** 시각적 위치 */
 export const PITCH_Y: Record<Pitch, number> = {
-  B4: 25,   // 추가
-  A4: 32.5, // G4-B4 사이
-  G4: 36,
-  F4: 39.5,
-  'F#4': 37.75, // 추가 (F4와 G4 사이)
-  E4: 43,
+  C4: 50,
   D4: 46.5,
-  C4: 50, // ledger line below
+  E4: 43,
+  F4: 39.5,
+  'F#4': 39.5,
+  G4: 36,
+  A4: 32.5,
+  B4: 29,
 };
 
 /** 음 이름 → 주파수 (Hz). 12-TET 표준 튜닝 (A4 = 440). */
+/** 음악적 의미: 소리 */
 export const PITCH_FREQ: Record<Pitch, number> = {
   B4: 493.88,
   C4: 261.63,

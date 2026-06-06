@@ -16,7 +16,7 @@ export function useSongScore(songId?: string) {
       setLoading(true);
 
       try {
-        const response = await song_score(songId);
+        const response = await song_score(songId);        
 
         if (!cancelled) {
             setSong(response);
