@@ -1,4 +1,4 @@
-import { PITCH_Y, type Bar as BarType } from '@/data/song';
+import { PITCH_Y, type Bar as BarType, type Pitch } from '@/api/songs/song.type';
 import { markBorderClass, markClass, type Mark } from '@/data/session';
 import { type Area, AREA_KO, AREA_DOT } from '@/lib/area';
 
@@ -11,9 +11,13 @@ type Props = {
   currentMarks: Mark[];
   lyrics?: string[]; // 마디당 음절 4개 (가사 표시 시)
   staffClassName?: string; // 악보 SVG 높이 — 거터 정렬이 필요한 그리드에선 'h-16' 고정
+  duration?: string[]; 
 };
 
-const noteX = (i: number) => 16 + i * 24;
+// 4음표 기준 균등 배치: 18, 42, 66, 90 (viewBox 116 기준)
+const NOTE_X = [18, 42, 66, 90] as const;
+const noteX = (i: number) => NOTE_X[i] ?? 18 + i * 24;
+const NOTE_Y_OFFSET = 3.5; 
 
 export function BarView({
   notes,
@@ -23,12 +27,18 @@ export function BarView({
   currentMarks,
   lyrics,
   staffClassName = 'h-auto',
+  duration=[],
 }: Props) {
   const playheadX = 8 + progress * 100;
   const activeNote = Math.min(
     Math.floor(progress * notes.length),
     notes.length - 1
   );
+
+  const LYRICS_SLOT = 4;
+  const normalizedLyrics = Array.from({ length: LYRICS_SLOT }, (_, i) => 
+    lyrics?.[i] ?? ''
+  )
 
   return (
     <div className="space-y-1">
@@ -57,46 +67,67 @@ export function BarView({
           <line x1="108" y1="15" x2="108" y2="43" stroke="hsl(var(--border))" strokeWidth="0.5" />
 
           {notes.map((p, i) => {
+            // PITCH_Y에 없는 pitch 방어
+            const y = PITCH_Y[p as Pitch];
+            if (y === undefined) return null;
+            
             const isActive = isCurrent && i === activeNote;
+            const isHalfNote = duration[i] === 'half';
 
             const noteColor = isActive
               ? '#ffda03'
               : 'hsl(var(--foreground))';
 
             return (
+              // 가선 
               <g key={i}>
-                {p === 'C4' && (
+                {y >= 46 && ( // D4(46.5)·C4(50) 모두 가선 표시
                   <line
-                    x1={noteX(i) - 5}
-                    y1="50"
-                    x2={noteX(i) + 5}
-                    y2="50"
+                    x1={noteX(i) - (isActive ? 7 : 5)}
+                    y1={y + NOTE_Y_OFFSET}
+                    x2={noteX(i) + (isActive ? 7 : 5)}
+                    y2={y + NOTE_Y_OFFSET}
                     stroke={noteColor}
-                    strokeWidth="0.8"
+                    strokeWidth="1"
                   />
                 )}
 
-                <ellipse
+                {/* 음표 */}
+                {isHalfNote ? (
+                  <ellipse
+                    cx={noteX(i)}
+                    cy={PITCH_Y[p] + NOTE_Y_OFFSET}
+                    rx={isActive ? 4.8 : 3.6}
+                    ry={isActive ? 3.8 : 2.8}
+                    fill="none"
+                    stroke={noteColor}
+                    strokeWidth="1.5"
+                  />
+                ) : (
+                  <ellipse
                   cx={noteX(i)}
-                  cy={PITCH_Y[p]}
+                  cy={PITCH_Y[p] + NOTE_Y_OFFSET}
                   rx={isActive ? 4.8 : 3.6}
                   ry={isActive ? 3.8 : 2.8}
                   fill={noteColor}
-                  transform={`rotate(-20 ${noteX(i)} ${PITCH_Y[p]})`}
+                  transform={`rotate(-20 ${noteX(i)} ${PITCH_Y[p] + NOTE_Y_OFFSET})`}
                   style={{
                     transition: 'fill 120ms ease, rx 120ms ease, ry 120ms ease',
                   }}
                 />
+                )}
+                
 
+                {/* 꼬리 */}
                 <line
-                  x1={noteX(i) + 3.4}
-                  y1={PITCH_Y[p] - 1}
-                  x2={noteX(i) + 3.4}
-                  y2={PITCH_Y[p] - 16}
+                  x1={noteX(i) + (isActive ? 4.7 : 3.3)}
+                  y1={PITCH_Y[p] + NOTE_Y_OFFSET}
+                  x2={noteX(i) + (isActive ? 4.7 : 3.3)}
+                  y2={PITCH_Y[p] + NOTE_Y_OFFSET- 17}
                   stroke={noteColor}
-                  strokeWidth={isActive ? '1.2' : '0.8'}
+                  strokeWidth={isActive ? '1.4' : '1.2'}
                   style={{
-                    transition: 'stroke 120ms ease',
+                    transition: 'stroke 120ms ease rx 120ms ease, ry 120ms ease',
                   }}
                 />
               </g>
@@ -123,8 +154,8 @@ export function BarView({
 
       {lyrics && (
         <div className="flex justify-around px-1.5 pt-1 text-sm font-semibold tracking-tight">
-          {lyrics.map((syl, i) => {
-            const isHighlighted = isCurrent && i < progress * lyrics.length;
+          {normalizedLyrics.map((syl, i) => {
+            const isHighlighted = isCurrent && i < progress * LYRICS_SLOT;
             return (
               <span
                 key={i}
