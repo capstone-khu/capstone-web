@@ -62,3 +62,13 @@ export function toLyrics(measures: ScoreData['measures']): string[][] {
   // BarView가 note[]를 통째로 받는다면 아래 toLyrics 대신 bars를 그대로 넘기면 됩니다.
   return sorted.map((m) => m.notes.map((n) => n.lyric));
 }
+
+/**
+ * measures 배열에서 마디별 duration(박자) 배열을 추출.
+ */
+export function toDuration(measures: ScoreData['measures']): string[][] {
+  const sorted = [...measures].sort((a, b) => a.measure_index - b.measure_index);
+  // BarView의 lyrics prop이 string 하나라면 첫 번째 note의 lyric을 대표값으로 사용.
+  // BarView가 note[]를 통째로 받는다면 아래 toLyrics 대신 bars를 그대로 넘기면 됩니다.
+  return sorted.map((m) => m.notes.map((n) => n.duration));
+}

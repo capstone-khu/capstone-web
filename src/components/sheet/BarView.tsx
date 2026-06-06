@@ -11,6 +11,7 @@ type Props = {
   currentMarks: Mark[];
   lyrics?: string[]; // 마디당 음절 4개 (가사 표시 시)
   staffClassName?: string; // 악보 SVG 높이 — 거터 정렬이 필요한 그리드에선 'h-16' 고정
+  duration?: string[]; 
 };
 
 // 4음표 기준 균등 배치: 18, 42, 66, 90 (viewBox 116 기준)
@@ -26,6 +27,7 @@ export function BarView({
   currentMarks,
   lyrics,
   staffClassName = 'h-auto',
+  duration=[],
 }: Props) {
   const playheadX = 8 + progress * 100;
   const activeNote = Math.min(
@@ -70,6 +72,7 @@ export function BarView({
             if (y === undefined) return null;
             
             const isActive = isCurrent && i === activeNote;
+            const isHalfNote = duration[i] === 'half';
 
             const noteColor = isActive
               ? '#ffda03'
@@ -80,17 +83,28 @@ export function BarView({
               <g key={i}>
                 {y >= 46 && ( // D4(46.5)·C4(50) 모두 가선 표시
                   <line
-                    x1={noteX(i) - 5}
+                    x1={noteX(i) - (isActive ? 7 : 5)}
                     y1={y + NOTE_Y_OFFSET}
-                    x2={noteX(i) + 5}
+                    x2={noteX(i) + (isActive ? 7 : 5)}
                     y2={y + NOTE_Y_OFFSET}
                     stroke={noteColor}
-                    strokeWidth="0.8"
+                    strokeWidth="1"
                   />
                 )}
 
                 {/* 음표 */}
-                <ellipse
+                {isHalfNote ? (
+                  <ellipse
+                    cx={noteX(i)}
+                    cy={PITCH_Y[p] + NOTE_Y_OFFSET}
+                    rx={isActive ? 4.8 : 3.6}
+                    ry={isActive ? 3.8 : 2.8}
+                    fill="none"
+                    stroke={noteColor}
+                    strokeWidth="1.5"
+                  />
+                ) : (
+                  <ellipse
                   cx={noteX(i)}
                   cy={PITCH_Y[p] + NOTE_Y_OFFSET}
                   rx={isActive ? 4.8 : 3.6}
@@ -101,17 +115,19 @@ export function BarView({
                     transition: 'fill 120ms ease, rx 120ms ease, ry 120ms ease',
                   }}
                 />
+                )}
+                
 
                 {/* 꼬리 */}
                 <line
-                  x1={noteX(i) + 3.4}
-                  y1={PITCH_Y[p] + NOTE_Y_OFFSET- 1}
-                  x2={noteX(i) + 3.4}
-                  y2={PITCH_Y[p] + NOTE_Y_OFFSET- 16}
+                  x1={noteX(i) + (isActive ? 4.7 : 3.3)}
+                  y1={PITCH_Y[p] + NOTE_Y_OFFSET}
+                  x2={noteX(i) + (isActive ? 4.7 : 3.3)}
+                  y2={PITCH_Y[p] + NOTE_Y_OFFSET- 17}
                   stroke={noteColor}
-                  strokeWidth={isActive ? '1.2' : '0.8'}
+                  strokeWidth={isActive ? '1.4' : '1.2'}
                   style={{
-                    transition: 'stroke 120ms ease',
+                    transition: 'stroke 120ms ease rx 120ms ease, ry 120ms ease',
                   }}
                 />
               </g>
