@@ -98,7 +98,10 @@ function PlayPageInner({ song }: { song: ScoreData }) {
         requesting={requesting}
         error={error}
         onStart={requestPermission}
-        onBack={() => navigate('/')}
+        onBack={() => {
+          handleExit(session_id);
+          navigate('/');
+        }}
       />
     );
   }
