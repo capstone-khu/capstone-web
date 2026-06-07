@@ -128,20 +128,18 @@ export default function MyPage() {
                         <RepeatBarCoach
                           focusMeasures={item.focus_measures}
                           onStart={async () => {
-                            startFocus(item.focus_measures)
                             const res = await createSession({song_id: Number(item.song_id), mode: item.mode});
-                                console.log(res);
-                                if(!res.success) {
-                                  alert(res.message);
-                                }
-                                else {
-                                  if(item.mode == 'solo') startSolo(res.data.session_id);
-                                  else startEnsemble(res.data.session_id, {
-                                    recordingId: String(item.duet_composite_id),
-                                    userName: item.partner_name as string,
-                                  });
-                                  navigate(`/play/${item.song_id}`)
-                                }
+                            if (!res.success) {
+                              alert(res.message);
+                              return;
+                            }
+                            if (item.mode === 'solo') startSolo(res.data.session_id);
+                            else startEnsemble(res.data.session_id, {
+                              recordingId: String(item.duet_composite_id),
+                              userName: item.partner_name as string,
+                            });
+                            startFocus(item.focus_measures);
+                            navigate(`/play/${item.song_id}`);
                           }}
                         />
                       )}
