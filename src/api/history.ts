@@ -2,6 +2,7 @@ import { api } from './client';
 
 export interface RecordingItem {
   session_id: string;
+  song_id: string;
   song_title: string;
   played_at: string;
   mode: string;
