@@ -73,19 +73,18 @@ function PlayPageInner({ song }: { song: ScoreData }) {
   const focusBars = usePlaySession((s) => s.focusBars);
   const activeFocusBar = focusBars.length > 0 ? (focusBars[focusIdx] ?? 0) : null;
 
-  const progress = usePlayProgress({ data: song, focusBar: activeFocusBar, onStartRecording: () => {  
+  const progress = usePlayProgress({
+    data: song,
+    focusBar: activeFocusBar,
+    onStartRecording: () => {  
       if (stream) startRecording(stream);
-    }, });
+    },
+  });
 
   const skipPermission = usePlaySession((s) => s.skipPermission);
   const session_id = usePlaySession((state) => state.session_id);
-  const finishCalledRef = useRef(false);
-
-  // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
-  useEffect(() => {
-    if (skipPermission) requestPermission();
-  }, [skipPermission, requestPermission]);
-
+ 
+  // 이미 stream 있을 때 호출
   const startRecording = (stream: MediaStream) => {
     // 오디오 전용 스트림 분리
     const audioStream = new MediaStream(stream.getAudioTracks());
@@ -143,6 +142,13 @@ function PlayPageInner({ song }: { song: ScoreData }) {
     }
   );
 
+  const finishCalledRef = useRef(false);
+
+  // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
+  useEffect(() => {
+    if (skipPermission) requestPermission();
+  }, [skipPermission, requestPermission]);
+
   const handleFinish = async () => {
     if (finishCalledRef.current) return;
     const id = session_id;
@@ -189,7 +195,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       alert(res.message);
     }
     
-    console.log('세션 중단 완료');
+    console.log('세션 중단 완료 + session_id', session_id);
     cleanup();
     navigate('/');
   };
