@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
@@ -7,19 +7,12 @@ import { AppHeader } from '@/components/AppHeader';
 import { ChevronLeftIcon } from '@/components/icons';
 import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { LYRICS, SONG } from '@/data/song';
-import {
-  ANALYSIS_WINDOW_BARS,
-  currentMarksUpToWindow,
-  marksFromSummary,
-  marksFromBarFails,
-  previousMarksByBar,
-  type Mark,
-} from '@/data/session';
 import { AREA_KO, AREA_TEXT, AREA_DOT } from '@/lib/area';
-import { getRecording } from '@/data/recordings';
-import { usePlaySession, prevSessionRecord } from '@/store/usePlaySession';
+import { type Mark } from '@/api/session'
+import { useSessionResult } from '@/hooks/useSessionResult';
+import Loading from '@/components/ui/loading';
 
-const TOTAL_WINDOWS = Math.ceil(SONG.bars.length / ANALYSIS_WINDOW_BARS);
+
 
 const BARS_PER_ROW = 6;
 const ROWS_PER_PAGE = 2; // 두 줄 = 한 페이지
@@ -28,53 +21,77 @@ const RESULT_PAGES = Math.ceil(TOTAL_ROWS / ROWS_PER_PAGE);
 
 
 export default function ResultPage() {
+  const { session_id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const mode = usePlaySession((s) => s.mode);
-  const session_id = usePlaySession((s) => s.session_id);
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
   const [page, setPage] = useState(0);
 
-  // 마이페이지 이력에서 진입하면 state.session_id가 실린다 → '과거 기록' 열람 모드.
-  // 연주 직후(/play)에서 오면 state가 없다 → '방금 끝난 연주' 모드.
-  const historyId = (location.state as { session_id?: string } | null)?.session_id ?? null;
-  const historyRec = historyId ? getRecording(historyId) : null;
-  const isHistory = !!historyRec;
+  const {
+    sessionResult,
+    loading,
+    error,
+  } = useSessionResult(Number(session_id)); 
 
-  // 협주 배지는 방금 끝난 연주에만 (과거 내 기록은 단독 연주).
-  const partner = !isHistory && mode === 'ensemble' ? getRecording(String(session_id)) : null;
+  const currentMarks = useMemo(() => {
+    if (!sessionResult) return new Map();
+    const map = new Map<number, Mark[]>();
 
-  // '다시 연주' 대신, 세션 후 AI 코치 디브리핑으로 이동. 과거 기록 맥락이면 그 session_id를 넘긴다.
-  const goCoach = () =>
-    navigate('/coach', { state: historyId ? { session_id: historyId } : undefined });
+    sessionResult.measures.forEach((measure) => {
+      map.set(
+        measure.measure_index - 1,
+        measure.current.map((item) => ({
+          area: item.domain as Mark['area'],
+          message: item.feedback,
+        }))
+      );
+    });
 
-  // 방금 끝난 연주 = 라이브 피드백 시퀀스 그대로. 과거 기록 = 그 기록의 요약으로부터 분포 생성.
-  const currentMarks = useMemo(
-    () =>
-      historyRec
-        ? historyRec.barFails
-          ? marksFromBarFails(historyRec.barFails)
-          : marksFromSummary(historyRec.summary)
-        : currentMarksUpToWindow(TOTAL_WINDOWS - 1),
-    [historyRec],
-  );
-  const prev_measures = prevSessionRecord((state) => state.measures);
-  const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => ({
-    window: m.measure_index,
-    marks: m.markings.map((mk) => ({ area: mk.domain, message: mk.feedbck })),
-  }));
-  const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
+    return map;
+  }, [sessionResult]);
+  
+
+  const previousMarks = useMemo(() => {
+    if (!sessionResult) return new Map();
+    const map = new Map<number, Mark[]>();
+
+    sessionResult.measures.forEach((measure) => {
+      map.set(
+        measure.measure_index - 1,
+        measure.previous.map((item) => ({
+          area: item.domain as Mark['area'],
+          message: item.feedback,
+        }))
+      );
+    });
+
+    return map;
+  }, [sessionResult]);
+
+  if (loading) return <Loading />;
+
+  if (error) {
+    return <div>결과를 불러올 수 없습니다.</div>;
+  }
+
+  if (!sessionResult) {
+    return <div>결과가 없습니다.</div>;
+  }
+
+  // 이전 세션 기록이 하나라도 있으면 히스토리 열람 모드로 간주
+  const isHistory = sessionResult.measures.some((m) => m.previous.length > 0);
+
+  const goCoach = () =>  navigate(`/coach/${session_id}`);
 
   return (
     <div className="min-h-screen bg-background">
       <AppHeader
-        onBack={() => navigate(isHistory ? '/mypage' : '/')}
+        onBack={() => navigate('/mypage')} // navigate(-1)
         title={
           <>
-            {isHistory ? `${historyRec.date} 연주 · ${SONG.title}` : `결과 · ${SONG.title}`}
-            {partner && (
+            결과 · {sessionResult.song_title}
+            {sessionResult.mode === 'duet' && (
               <span className="rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">
-                협주 · {partner.playerName}
+                협주 · {sessionResult.partner_name}
               </span>
             )}
           </>

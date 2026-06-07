@@ -65,7 +65,7 @@ export default function MyPage() {
   // 내 기록은 단독 연주 결과로 표시 — 협주 배지가 남지 않도록 모드 초기화.
   // 어느 기록을 열었는지 결과 화면에 넘겨 '과거 기록' 맥락으로 보여준다.
   const viewResult = (session_id: string) => {
-    navigate('/result', { state: { session_id } });
+    navigate(`/result/${session_id}`);
   };
 
   return (
