@@ -126,8 +126,7 @@ export default function MyPage() {
                           focusMeasures={item.focus_measures}
                           onStart={() => {
                             startFocus(item.focus_measures)
-                            // ⚠️ songID가 존재해야 함. 
-                            navigate(`/play/1`)
+                            navigate(`/play/${item.song_id}`)
                           }}
                         />
                       )}
