@@ -96,14 +96,8 @@ export type Mark = { area: Area; message?: string };
 
 // 세션 결과 마킹 조회
 export const getSessionResult = async (session_id: number) : Promise<SessionResult> => {
-<<<<<<< HEAD
   console.log('getSessionResult get session_id: ', session_id);
   const response = await api.get(
-=======
-
-    console.log('getSessionResult get session_id: ', session_id);
-    const response = await api.get(
->>>>>>> 61cc830205ffb358fac16c5faf278e131db5b46b
     `/sessions/${session_id}/result`
   );
   console.log(response.data);
