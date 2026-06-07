@@ -119,6 +119,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
     }
   );
 
+  const finishCalledRef = useRef(false);
 
   // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
   useEffect(() => {
@@ -133,6 +134,9 @@ function PlayPageInner({ song }: { song: ScoreData }) {
     }
 
     try {
+      if (session_id && activeFocusBar === null) {
+        await completeSession(session_id);
+        console.log('세션 종료');
       // 녹화 종료 + blob 생성
       const [audioBlob, videoBlob] = await Promise.all([
         stopAudio(),
@@ -146,16 +150,15 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       const res = await completeSession(id, audioBlob, videoBlob);
 
       console.log('세션 완료:', res);
-
+      cleanup();
       // 성공 시 결과 페이지 이동
       navigate(`/result/${id}`);
+    if (finishCalledRef.current) return;
+    finishCalledRef.current = true;
     } catch (e) {
       console.error('session finish failed', e);
       alert('연주 저장 실패');
       navigate('/');
-    } finally {
-      // 항상 정리
-      cleanup();
     }
   };
   
@@ -487,6 +490,9 @@ function PlayingView({
       ),
     [currentFeedbacks],
   );
+  // useEffect(() => {
+  //   if(isFinished && focused) onFinish();
+  // }, [isFinished, focused])
 
   const handleBack = () => {
     if (isFinished || focused) {
@@ -641,7 +647,7 @@ function PlayingView({
               <div className="flex gap-3">
                 {focused ? (
                   <>
-                    <Button variant="outline" size="lg" onClick={onExit}>
+                    <Button variant="outline" size="lg" onClick={onFinish}>
                       돌아가기
                     </Button>
 

@@ -16,6 +16,7 @@ import { formatRelativeAndAbsolute } from '@/lib/utils';
 import Loading from '@/components/ui/loading';
 import { useDuetVideo } from '@/hooks/useDuetVideo';
 import { usePlaySession } from '@/store/usePlaySession';
+import { createSession } from '@/api/session';
 
 
 export default function MyPage() {
@@ -27,6 +28,8 @@ export default function MyPage() {
   const [page, setPage] = useState(1);
   const [videoOpen, setVideoOpen] = useState(false);
   const startFocus = usePlaySession((s) => s.startFocus);
+  const startSolo = usePlaySession((s) => s.startSolo);
+  const startEnsemble = usePlaySession((s) => s.startEnsemble);
 
   // 연주 이력 조회 데이터
   const { items, size, total, loading: recordLoading } = useRecordHistory();
@@ -124,9 +127,19 @@ export default function MyPage() {
                       {item.focus_measures?.length > 0 && (
                         <RepeatBarCoach
                           focusMeasures={item.focus_measures}
-                          onStart={() => {
-                            startFocus(item.focus_measures)
-                            navigate(`/play/${item.song_id}`)
+                          onStart={async () => {
+                            const res = await createSession({song_id: Number(item.song_id), mode: item.mode});
+                            if (!res.success) {
+                              alert(res.message);
+                              return;
+                            }
+                            if (item.mode === 'solo') startSolo(res.data.session_id);
+                            else startEnsemble(res.data.session_id, {
+                              recordingId: String(item.duet_composite_id),
+                              userName: item.partner_name as string,
+                            });
+                            startFocus(item.focus_measures);
+                            navigate(`/play/${item.song_id}`);
                           }}
                         />
                       )}
