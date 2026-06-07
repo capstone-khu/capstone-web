@@ -38,17 +38,87 @@ export default function PlayPage() {
 
 function PlayPageInner({ song }: { song: ScoreData }) {
   const [focusIdx, setFocusIdx] = useState(0);
+
+  const audioRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+
+  const audioChunksRef = useRef<Blob[]>([]);
+  const videoChunksRef = useRef<Blob[]>([]);
+
   const navigate = useNavigate();
   const { stream, error, requesting, stage, requestPermission, cleanup } = useMediaPermission();
 
   const focusBars = usePlaySession((s) => s.focusBars);
   const activeFocusBar = focusBars.length > 0 ? (focusBars[focusIdx] ?? 0) : null;
 
-  const progress = usePlayProgress({ data: song, focusBar: activeFocusBar });
-
+  const progress = usePlayProgress({
+    data: song,
+    focusBar: activeFocusBar,
+    onStartRecording: () => {  
+      if (stream) startRecording(stream);
+    },
+  });
   const skipPermission = usePlaySession((s) => s.skipPermission);
   const session_id = usePlaySession((state) => state.session_id);
  
+  // 이미 stream 있을 때 호출
+  const startRecording = (stream: MediaStream) => {
+    // 오디오 전용 스트림 분리
+    const audioStream = new MediaStream(stream.getAudioTracks());
+    // 비디오는 전체 스트림(오디오 포함해도 무방)
+    const videoStream = stream;
+
+    const audioRecorder = new MediaRecorder(audioStream);
+    const videoRecorder = new MediaRecorder(videoStream);
+
+    audioRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+
+    videoRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) videoChunksRef.current.push(e.data);
+    };
+
+    audioRecorder.start();
+    videoRecorder.start();
+
+    audioRecorderRef.current = audioRecorder;
+    videoRecorderRef.current = videoRecorder;
+  };
+
+  const stopAudio = () =>
+    new Promise<Blob>((resolve, reject) => {
+      const recorder = audioRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        return reject('audio recorder not started');
+      }
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        audioChunksRef.current = [];
+        resolve(blob);
+      };      
+
+      recorder.stop();
+    }
+  );
+
+  const stopVideo = () =>
+    new Promise<Blob>((resolve, reject) => {
+      const recorder = videoRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        return reject('video recorder not started');
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(videoChunksRef.current, { type: 'video/webm' });
+        videoChunksRef.current = [];
+        resolve(blob);
+      };        
+
+      recorder.stop();
+    }
+  );
+
 
   // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
   useEffect(() => {
@@ -56,16 +126,36 @@ function PlayPageInner({ song }: { song: ScoreData }) {
   }, [skipPermission, requestPermission]);
 
   const handleFinish = async () => {
+    const id = session_id;
+    if (!id) {
+      navigate('/');
+      return;
+    }
+
     try {
-      if (session_id) {
-        await completeSession(session_id);
-        console.log('세션 종료');
-      }
+      // 녹화 종료 + blob 생성
+      const [audioBlob, videoBlob] = await Promise.all([
+        stopAudio(),
+        stopVideo(),
+      ]);
+
+      console.log('created audio:', audioBlob.size, 'bytes', audioBlob.type);
+      console.log('created video:', videoBlob.size, 'bytes', videoBlob.type);
+
+      // 서버 업로드 + session 완료
+      const res = await completeSession(id, audioBlob, videoBlob);
+
+      console.log('세션 완료:', res);
+
+      // 성공 시 결과 페이지 이동
+      navigate(`/result/${id}`);
     } catch (e) {
-      console.error('session complete failed', e);
+      console.error('session finish failed', e);
+      alert('연주 저장 실패');
+      navigate('/');
     } finally {
+      // 항상 정리
       cleanup();
-      navigate('/result');
     }
   };
   
@@ -82,7 +172,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       alert(res.message);
     }
     
-    console.log('세션 중단 완료');
+    console.log('세션 중단 완료 + session_id', session_id);
     cleanup();
     navigate('/');
   };
