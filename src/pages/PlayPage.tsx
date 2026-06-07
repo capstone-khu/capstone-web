@@ -48,7 +48,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
 
   const skipPermission = usePlaySession((s) => s.skipPermission);
   const session_id = usePlaySession((state) => state.session_id);
- 
+  const finishCalledRef = useRef(false);
 
   // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
   useEffect(() => {
@@ -56,8 +56,10 @@ function PlayPageInner({ song }: { song: ScoreData }) {
   }, [skipPermission, requestPermission]);
 
   const handleFinish = async () => {
+    if (finishCalledRef.current) return;
+    finishCalledRef.current = true;
     try {
-      if (session_id) {
+      if (session_id && activeFocusBar === null) {
         await completeSession(session_id);
         console.log('세션 종료');
       }
@@ -65,7 +67,7 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       console.error('session complete failed', e);
     } finally {
       cleanup();
-      navigate('/result');
+      navigate(`/result/${session_id}`);
     }
   };
   
@@ -397,6 +399,9 @@ function PlayingView({
       ),
     [currentFeedbacks],
   );
+  // useEffect(() => {
+  //   if(isFinished && focused) onFinish();
+  // }, [isFinished, focused])
 
   const handleBack = () => {
     if (isFinished || focused) {
@@ -551,7 +556,7 @@ function PlayingView({
               <div className="flex gap-3">
                 {focused ? (
                   <>
-                    <Button variant="outline" size="lg" onClick={onExit}>
+                    <Button variant="outline" size="lg" onClick={onFinish}>
                       돌아가기
                     </Button>
 

@@ -66,8 +66,6 @@ export const usePlaySession = create<PlaySessionState>((set) => ({
 
   startFocus: (bars) =>
     set({
-      mode: 'solo',
-      partner: null,
       skipPermission: true,
       focusBars: bars,
     }),
