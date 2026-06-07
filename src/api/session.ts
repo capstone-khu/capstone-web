@@ -37,11 +37,24 @@ export const abortSession = async (session_id : number) => {
 }
 
 // 세션 종료
-export const completeSession = async (session_id: number) => {
-  console.log(`complete session id: ${session_id}`);
+export const completeSession = async (
+  session_id: number,
+  audio: Blob,
+  video: Blob
+) => {
+  const formData = new FormData();
+
+  formData.append('audio', audio, 'audio.webm');
+  formData.append('video', video, 'video.webm');
 
   const response = await api.post(
-    `/sessions/${session_id}/complete`
+    `/sessions/${session_id}/complete`,
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
   );
 
   return response.data;
@@ -83,8 +96,8 @@ export type Mark = { area: Area; message?: string };
 
 // 세션 결과 마킹 조회
 export const getSessionResult = async (session_id: number) : Promise<SessionResult> => {
-
-    const response = await api.get(
+  console.log('getSessionResult get session_id: ', session_id);
+  const response = await api.get(
     `/sessions/${session_id}/result`
   );
   console.log(response.data);

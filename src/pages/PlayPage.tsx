@@ -29,6 +29,30 @@ import { prevSessionRecord } from '@/store/usePlaySession';
 
 export default function PlayPage() {
   const { id } = useParams();
+  // const socketRef = useRef<WebSocket | null>(null);
+  // const session_id = usePlaySession((s) => s.session_id);
+
+  // useEffect(() => {
+  //   const socket = new WebSocket(`ws://${import.meta.env.VITE_API_URL}/sessions/${session_id}/stream`);
+  //   socket.onopen = () => {
+  //     console.log('스트리밍 시작');
+  //   };
+  //   socket.onmessage = (e) => {
+  //     console.log(e.data);
+  //   };
+  //   socket.onclose = (e) => {
+  //     console.log(e.code);
+  //     console.log(e.reason);
+  //     console.log('스트리밍 종료');
+  //   };
+  //   socket.onerror = (e) => {
+  //     console.error(e);
+  //   };
+  //   return () => {
+  //     socketRef.current?.close();
+  //   };
+  // }, []);
+
   // 선택한 곡 정보 조회
   const { song, loading } = useSongScore(id);
   if (loading || !song ) return <Loading />;
@@ -38,13 +62,20 @@ export default function PlayPage() {
 
 function PlayPageInner({ song }: { song: ScoreData }) {
   const [focusIdx, setFocusIdx] = useState(0);
+  const audioRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+
+  const audioChunksRef = useRef<Blob[]>([]);
+  const videoChunksRef = useRef<Blob[]>([]);
   const navigate = useNavigate();
   const { stream, error, requesting, stage, requestPermission, cleanup } = useMediaPermission();
 
   const focusBars = usePlaySession((s) => s.focusBars);
   const activeFocusBar = focusBars.length > 0 ? (focusBars[focusIdx] ?? 0) : null;
 
-  const progress = usePlayProgress({ data: song, focusBar: activeFocusBar });
+  const progress = usePlayProgress({ data: song, focusBar: activeFocusBar, onStartRecording: () => {  
+      if (stream) startRecording(stream);
+    }, });
 
   const skipPermission = usePlaySession((s) => s.skipPermission);
   const session_id = usePlaySession((state) => state.session_id);
@@ -55,19 +86,93 @@ function PlayPageInner({ song }: { song: ScoreData }) {
     if (skipPermission) requestPermission();
   }, [skipPermission, requestPermission]);
 
+  const startRecording = (stream: MediaStream) => {
+    // 오디오 전용 스트림 분리
+    const audioStream = new MediaStream(stream.getAudioTracks());
+    // 비디오는 전체 스트림(오디오 포함해도 무방)
+    const videoStream = stream;
+
+    const audioRecorder = new MediaRecorder(audioStream);
+    const videoRecorder = new MediaRecorder(videoStream);
+
+    audioRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+
+    videoRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) videoChunksRef.current.push(e.data);
+    };
+
+    audioRecorder.start();
+    videoRecorder.start();
+
+    audioRecorderRef.current = audioRecorder;
+    videoRecorderRef.current = videoRecorder;
+  };
+
+  const stopAudio = () =>
+    new Promise<Blob>((resolve, reject) => {
+      const recorder = audioRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        return reject('audio recorder not started');
+      }
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        audioChunksRef.current = [];
+        resolve(blob);
+      };      
+
+      recorder.stop();
+    }
+  );
+
+  const stopVideo = () =>
+    new Promise<Blob>((resolve, reject) => {
+      const recorder = videoRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        return reject('video recorder not started');
+      }
+
+      recorder.onstop = () => {
+        const blob = new Blob(videoChunksRef.current, { type: 'video/webm' });
+        videoChunksRef.current = [];
+        resolve(blob);
+      };        
+
+      recorder.stop();
+    }
+  );
+
   const handleFinish = async () => {
     if (finishCalledRef.current) return;
+    const id = session_id;
+    if (!id) {
+      navigate('/');
+      return;
+    }
     finishCalledRef.current = true;
     try {
       if (session_id && activeFocusBar === null) {
-        await completeSession(session_id);
-        console.log('세션 종료');
+        const [audioBlob, videoBlob] = await Promise.all([
+          stopAudio(),
+          stopVideo(),
+        ]);
+
+        console.log('created audio:', audioBlob.size, 'bytes', audioBlob.type);
+        console.log('created video:', videoBlob.size, 'bytes', videoBlob.type);
+
+        // 서버 업로드 + session 완료
+        const res = await completeSession(id, audioBlob, videoBlob);
+
+        console.log('세션 완료:', res);
+        navigate(`/result/${id}`);
       }
     } catch (e) {
       console.error('session complete failed', e);
+      alert('연주 저장 실패');
+      navigate('/');
     } finally {
       cleanup();
-      navigate(`/result/${session_id}`);
     }
   };
   
