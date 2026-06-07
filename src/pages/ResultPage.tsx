@@ -6,18 +6,17 @@ import { Modal } from '@/components/ui/modal';
 import { AppHeader } from '@/components/AppHeader';
 import { ChevronLeftIcon } from '@/components/icons';
 import { BarView, LaneGutter } from '@/components/sheet/BarView';
-import { LYRICS, SONG } from '@/data/song';
 import { AREA_KO, AREA_TEXT, AREA_DOT } from '@/lib/area';
 import { type Mark } from '@/api/session'
+import { type Pitch } from '@/api/songs/song.type';
 import { useSessionResult } from '@/hooks/useSessionResult';
 import Loading from '@/components/ui/loading';
+import { useSongScore } from '@/hooks/play/useSongScore';
 
 
 
 const BARS_PER_ROW = 6;
 const ROWS_PER_PAGE = 2; // 두 줄 = 한 페이지
-const TOTAL_ROWS = Math.ceil(SONG.bars.length / BARS_PER_ROW);
-const RESULT_PAGES = Math.ceil(TOTAL_ROWS / ROWS_PER_PAGE);
 
 
 export default function ResultPage() {
@@ -26,11 +25,37 @@ export default function ResultPage() {
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
   const [page, setPage] = useState(0);
 
+  // 세션 결과 데이터 
   const {
     sessionResult,
-    loading,
+    loading: resultLoading,
     error,
   } = useSessionResult(Number(session_id)); 
+
+  // 해당 곡 악보 조회 데이터
+  const {
+    song, 
+    loading: songLoading
+  } = useSongScore(sessionResult?.song_id?.toString())
+
+  const bars = useMemo(() => {
+    if (!song) return [];
+    return song.measures.map((m) => m.notes.map((n) => n.pitch as Pitch));
+  }, [song]);
+
+  const lyrics = useMemo(() => {
+    if (!song) return [];
+    return song.measures.map((m) => m.notes.map((n) => n.lyric));
+  }, [song]);
+
+  const durations = useMemo(() => {
+    if (!song) return [];
+    return song.measures.map((m) => m.notes.map((n) => n.duration));
+  }, [song]);
+
+  
+  const totalRows = Math.ceil(bars.length / BARS_PER_ROW);
+  const resultPages = Math.ceil(totalRows / ROWS_PER_PAGE);
 
   const currentMarks = useMemo(() => {
     if (!sessionResult) return new Map();
@@ -67,7 +92,7 @@ export default function ResultPage() {
     return map;
   }, [sessionResult]);
 
-  if (loading) return <Loading />;
+  if (resultLoading || songLoading) return <Loading />;
 
   if (error) {
     return <div>결과를 불러올 수 없습니다.</div>;
@@ -76,6 +101,7 @@ export default function ResultPage() {
   if (!sessionResult) {
     return <div>결과가 없습니다.</div>;
   }
+
 
   // 이전 세션 기록이 하나라도 있으면 히스토리 열람 모드로 간주
   const isHistory = sessionResult.measures.some((m) => m.previous.length > 0);
@@ -123,12 +149,12 @@ export default function ResultPage() {
             <div className="space-y-4">
               {Array.from({ length: ROWS_PER_PAGE }).map((_, r) => {
                 const row = page * ROWS_PER_PAGE + r;
-                if (row >= TOTAL_ROWS) return null;
+                if (row >= totalRows) return null;
                 return (
                   <div key={row} className="flex items-start gap-2">
                     <LaneGutter staffSpacerClassName="h-16" className="pt-1" />
                     <div className="grid min-w-0 flex-1 grid-cols-6 gap-2">
-                      {SONG.bars.slice(row * BARS_PER_ROW, (row + 1) * BARS_PER_ROW).map((bar, i) => {
+                      {bars.slice(row * BARS_PER_ROW, (row + 1) * BARS_PER_ROW).map((bar, i) => {
                         const barIndex = row * BARS_PER_ROW + i;
                         return (
                           <button
@@ -143,8 +169,9 @@ export default function ResultPage() {
                               notes={bar}
                               previousMarks={previousMarks.get(barIndex) ?? []}
                               currentMarks={currentMarks.get(barIndex) ?? []}
-                              lyrics={LYRICS[barIndex]}
+                              lyrics={lyrics[barIndex]}
                               staffClassName="h-16"
+                              duration={durations[barIndex]}
                             />
                           </button>
                         );
@@ -154,7 +181,7 @@ export default function ResultPage() {
                 );
               })}
             </div>
-            <PageNav page={page} total={RESULT_PAGES} onChange={setPage} />
+            <PageNav page={page} total={resultPages} onChange={setPage} />
           </CardContent>
         </Card>
 
@@ -178,6 +205,9 @@ export default function ResultPage() {
             barIndex={selectedBar}
             currentBarMarks={currentMarks.get(selectedBar) ?? []}
             previousBarMarks={previousMarks.get(selectedBar) ?? []}
+            bars={bars}
+            lyrics={lyrics}
+            durations={durations}
           />
         )}
       </Modal>
@@ -262,12 +292,18 @@ function BarDetail({
   barIndex,
   currentBarMarks,
   previousBarMarks,
+  bars,
+  lyrics,
+  durations,
 }: {
   barIndex: number;
   currentBarMarks: Mark[];
   previousBarMarks: Mark[];
+  bars: Pitch[][];
+  lyrics: string[][];
+  durations: string[][];
 }) {
-  const notes = SONG.bars[barIndex];
+  const notes = bars[barIndex];
 
   return (
     <div className="space-y-5 p-6">
@@ -278,7 +314,8 @@ function BarDetail({
           notes={notes}
           previousMarks={previousBarMarks}
           currentMarks={currentBarMarks}
-          lyrics={LYRICS[barIndex]}
+          lyrics={lyrics[barIndex]}
+          duration={durations[barIndex]}
         />
       </div>
 
