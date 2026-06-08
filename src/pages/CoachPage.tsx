@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppHeader } from '@/components/AppHeader';
@@ -8,13 +8,29 @@ import { SONG } from '@/data/song';
 import { liveSessionSummary } from '@/data/session';
 import { type Area, AREA_KO, AREA_TEXT, AREA_PILL } from '@/lib/area';
 import { getRecording } from '@/data/recordings';
-import { buildCoachReport, type CoachLevel } from '@/data/coach';
+import { buildCoachReport } from '@/data/coach';
+import { getAiAnalysis } from '@/api/ai_analysis';
 
+type AiLevel = 'weak' | 'ok' | 'good';
 
-const LEVEL_LABEL: Record<CoachLevel, string> = {
+type AiDomain = {
+  level: AiLevel;
+  diagnosis: string;
+  practice?: string;
+};
+
+type AiReport = {
+  session_id: number;
+  headline: string;
+  coach_comment: string;
+  domains: Record<Area, AiDomain>;
+  focus_measures: number[];
+};
+
+const LEVEL_LABEL: Record<AiLevel, string> = {
   good: '잘함',
-  watch: '보통',
-  focus: '아쉬움',
+  ok: '보통',
+  weak: '아쉬움',
 };
 
 function AreaIcon({ area, className }: { area: Area; className?: string }) {
@@ -40,15 +56,26 @@ export default function CoachPage() {
     () => buildCoachReport(isHistory ? historyRec.summary : liveSessionSummary()),
     [isHistory, historyRec],
   );
+  const [ai_report, setAiReport] = useState<AiReport | null>(null);
 
   // 영역 탭 — 기본은 가장 아쉬운 영역.
-  const [tab, setTab] = useState<Area>(report.primaryArea);
-  const active = report.items.find((it) => it.area === tab);
+  const [tab, setTab] = useState<Area>('pitch');
+  const active = ai_report?.domains[tab];
 
   // LLM 호출을 흉내 내는 로딩 (mock). 실제 연동 시 호출 완료 시점에 해제.
   const [loading, setLoading] = useState(true);
+  const { session_id } = useParams();
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 1300);
+    const get = async () => {
+      const res = await getAiAnalysis(Number(session_id));
+      if(res.success) {
+        console.log(res.data);
+        setAiReport(res.data);
+      }
+      else alert(res.message);
+    }
+    get();
     return () => clearTimeout(t);
   }, []);
 
@@ -88,8 +115,8 @@ export default function CoachPage() {
               AI 상세 분석
             </div>
             <CardContent className="space-y-3 p-6">
-              <h2 className="text-xl font-bold leading-snug">{report.headline}</h2>
-              <p className="text-[15px] leading-relaxed text-muted-foreground">{report.summary}</p>
+              <h2 className="text-xl font-bold leading-snug">{ai_report?.headline}</h2>
+              <p className="text-[15px] leading-relaxed text-muted-foreground">{ai_report?.coach_comment}</p>
             </CardContent>
           </Card>
 
@@ -114,19 +141,19 @@ export default function CoachPage() {
               ))}
             </div>
             {active && (
-              <Card key={active.area} className="animate-feedback-in">
+              <Card key={tab} className="animate-feedback-in">
                 <CardContent className="space-y-2.5 p-5">
                   <span
-                    className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold ${AREA_PILL[active.area]}`}
+                    className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold ${AREA_PILL[tab]}`}
                   >
                     {LEVEL_LABEL[active.level]}
                   </span>
-                  <p className="text-sm leading-relaxed text-foreground">{active.comment}</p>
+                  <p className="text-sm leading-relaxed text-foreground">{active.diagnosis}</p>
                   {active.practice && (
                     <div className="rounded-xl bg-gray-50 px-3.5 py-3">
-                      <p className="text-xs font-bold text-muted-foreground">
+                      {/* <p className="text-xs font-bold text-muted-foreground">
                         {active.practiceTitle}
-                      </p>
+                      </p> */}
                       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                         {active.practice}
                       </p>
