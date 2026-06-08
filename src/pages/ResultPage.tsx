@@ -7,7 +7,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { ChevronLeftIcon } from '@/components/icons';
 import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { AREA_KO, AREA_TEXT, AREA_DOT } from '@/lib/area';
-import { type Mark } from '@/api/session'
+import { type Mark, getSessionDetail } from '@/api/session'
 import { type Pitch } from '@/api/songs/song.type';
 import { useSessionResult } from '@/hooks/useSessionResult';
 import Loading from '@/components/ui/loading';
@@ -18,12 +18,30 @@ import { useSongScore } from '@/hooks/play/useSongScore';
 const BARS_PER_ROW = 6;
 const ROWS_PER_PAGE = 2; // 두 줄 = 한 페이지
 
+interface IMarking {
+  domain: string;
+  action_id: string;
+  feedback: string;
+}
+
+interface IMeasureDetail {
+  measure_index: number;
+  notes: {
+    pitch: string;
+    duration: string;
+    position: number;
+    lyric: string;
+  }[];
+  current_markings: IMarking[];
+  previous_markings: IMarking[];
+}
 
 export default function ResultPage() {
   const { session_id } = useParams();
   const navigate = useNavigate();
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
   const [page, setPage] = useState(0);
+  const [measureDetail, setMeasureDetail] = useState<IMeasureDetail | null >(null);
 
   // 세션 결과 데이터 
   const {
@@ -160,18 +178,52 @@ export default function ResultPage() {
                           <button
                             key={barIndex}
                             type="button"
-                            onClick={() => setSelectedBar(barIndex)}
+                            onClick={async () => {
+                              setSelectedBar(barIndex);
+                              const res = await getSessionDetail(Number(session_id), barIndex+1);
+                              if(res.success) {
+                                console.log(res.data);
+                                setMeasureDetail(res.data);
+                              }
+                              else alert(res.message);
+                            }}
                             className="block w-full rounded-md p-1 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label={`마디 ${barIndex + 1} 자세히 보기`}
                           >
                             <BarView
                               barIndex={barIndex}
-                              notes={bar}
-                              previousMarks={previousMarks.get(barIndex) ?? []}
-                              currentMarks={currentMarks.get(barIndex) ?? []}
-                              lyrics={lyrics[barIndex]}
+                              notes={
+                                barIndex === selectedBar && measureDetail
+                                  ? measureDetail.notes.map((n) => n.pitch as Pitch)
+                                  : bars[barIndex]
+                              }
+                              previousMarks={
+                                barIndex === selectedBar && measureDetail
+                                  ? measureDetail.previous_markings.map((m) => ({
+                                      area: m.domain as Mark['area'],
+                                      message: m.feedback,
+                                    }))
+                                  : previousMarks.get(barIndex) ?? []
+                              }
+                              currentMarks={
+                                barIndex === selectedBar && measureDetail
+                                  ? measureDetail.current_markings.map((m) => ({
+                                      area: m.domain as Mark['area'],
+                                      message: m.feedback,
+                                    }))
+                                  : currentMarks.get(barIndex) ?? []
+                              }
+                              lyrics={
+                                barIndex === selectedBar && measureDetail
+                                  ? measureDetail.notes.map((n) => n.lyric)
+                                  : lyrics[barIndex]
+                              }
                               staffClassName="h-16"
-                              duration={durations[barIndex]}
+                              duration={
+                                barIndex === selectedBar && measureDetail
+                                  ? measureDetail.notes.map((n) => n.duration)
+                                  : durations[barIndex]
+                              }
                             />
                           </button>
                         );
