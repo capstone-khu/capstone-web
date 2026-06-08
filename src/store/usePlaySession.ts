@@ -20,6 +20,10 @@ type PlaySessionState = {
   /** 집중 반복 레슨 대상 마디(0-based) 목록. 비어 있으면 일반 연주. 여러 개면 마디 탭으로 전환. */
   focusBars: number[];
 
+  /** 현재 재생 중인 마디 인덱스 (1-based, API measure_index 기준) */
+  currentMeasureIndex: number;
+  setCurrentMeasureIndex: (index: number) => void;
+
   /** 혼자 연주 시작 */
   startSolo: (arg0:number) => void;
 
@@ -44,6 +48,9 @@ export const usePlaySession = create<PlaySessionState>((set) => ({
   skipPermission: false,
   focusBars: [],
 
+  currentMeasureIndex: 1,
+  setCurrentMeasureIndex: (index) => set({ currentMeasureIndex: index }),
+
   startSolo: (session_id) =>
     set({
       mode: 'solo',
@@ -51,6 +58,7 @@ export const usePlaySession = create<PlaySessionState>((set) => ({
       partner: null,
       skipPermission: false,
       focusBars: [],
+      currentMeasureIndex: 1,
     }),
   
   startEnsemble: (session_id, partner) =>

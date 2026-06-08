@@ -7,8 +7,6 @@ import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import {
-  FEEDBACK_SEQUENCE,
-  currentMarksUpToWindow,
   previousCautionsForWindow,
   previousMarksByBar,
   type Caution,
@@ -26,47 +24,84 @@ import { usePlayProgress } from '@/hooks/play/usePlayProgress';
 import { type ScoreData, type Pitch } from '@/api/songs/song.type';
 import { abortSession, completeSession} from '@/api/session';
 import { prevSessionRecord } from '@/store/usePlaySession';
+import { sendVideoFrame, sendAudioFrame } from '@/api/socket';
+
+type WsFeedbackItem = {
+  domain: Area;
+  action_id: string;
+  action: string;
+  feedback: string;
+};
+
+type WsFeedbackMessage =
+  | { type: 'feedback'; measure_index: number; items: WsFeedbackItem[] }
+  | { type: 'feedback_update'; measure_index: number; item: WsFeedbackItem };
+
+function itemToFeedback(item: WsFeedbackItem): Feedback {
+  if (item.action === 'CALL_SUPERVISOR') {
+    return {
+      tone: 'supervisor',
+      message: item.feedback,
+      action: 'CALL_SUPERVISOR',
+      ...(item.domain ? { area: item.domain } : {}),
+    };
+  }
+  if (item.action?.startsWith('POSITIVE')) {
+    return { tone: 'positive', message: item.feedback };
+  }
+  return { tone: 'normal', area: item.domain, message: item.feedback };
+}
 
 export default function PlayPage() {
   const { id } = useParams();
   // const socketRef = useRef<WebSocket | null>(null);
-  // const session_id = usePlaySession((s) => s.session_id);
+  const session_id = usePlaySession((s) => s.session_id);
+  const token = localStorage.getItem('access_token');
+  const [socket, setSocket] = useState<WebSocket | null>(null);
 
-  // useEffect(() => {
-  //   const socket = new WebSocket(`ws://${import.meta.env.VITE_API_URL}/sessions/${session_id}/stream`);
-  //   socket.onopen = () => {
-  //     console.log('스트리밍 시작');
-  //   };
-  //   socket.onmessage = (e) => {
-  //     console.log(e.data);
-  //   };
-  //   socket.onclose = (e) => {
-  //     console.log(e.code);
-  //     console.log(e.reason);
-  //     console.log('스트리밍 종료');
-  //   };
-  //   socket.onerror = (e) => {
-  //     console.error(e);
-  //   };
-  //   return () => {
-  //     socketRef.current?.close();
-  //   };
-  // }, []);
+  useEffect(() => {
+    const ws = new WebSocket(`wss://api-capstone.kro.kr/sessions/${session_id}/stream?token=${token}`);
+    setSocket(ws);
+    ws.onopen = () => {
+      console.log('스트리밍 시작');
+      console.log(
+        'state',
+        ws.readyState
+      );
+    };
+    ws.onclose = (e) => {
+      console.log(e.code);
+      console.log(e.reason);
+      console.log('스트리밍 종료');
+    };
+    ws.onerror = (e) => {
+      console.error(e);
+    };
+    return () => {
+      ws.close();
+    };
+  }, [session_id, token]);
 
   // 선택한 곡 정보 조회
   const { song, loading } = useSongScore(id);
   if (loading || !song ) return <Loading />;
 
-  return <PlayPageInner song={song} />;
+  return <PlayPageInner song={song} ws={socket}/>;
 }
 
-function PlayPageInner({ song }: { song: ScoreData }) {
+function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) {
   const [focusIdx, setFocusIdx] = useState(0);
+  const [latestFeedbacks, setLatestFeedbacks] = useState<Feedback[]>([]);
+  const [liveMarksByBar, setLiveMarksByBar] = useState<Map<number, Mark[]>>(new Map());
   const audioRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const audioChunksRef = useRef<Blob[]>([]);
   const videoChunksRef = useRef<Blob[]>([]);
+  const videoIntervalRef = useRef<number | null>(null);
+  const audioSenderRef = useRef<{ audioContext: AudioContext; workletNode: AudioWorkletNode } | null>(null);
+  const t0Ref = useRef<number>(0);
   const navigate = useNavigate();
   const { stream, error, requesting, stage, requestPermission, cleanup } = useMediaPermission();
 
@@ -76,14 +111,105 @@ function PlayPageInner({ song }: { song: ScoreData }) {
   const progress = usePlayProgress({
     data: song,
     focusBar: activeFocusBar,
-    onStartRecording: () => {  
-      if (stream) startRecording(stream);
+    onStartRecording: () => {
+      if (!stream || !ws || !videoRef.current) return;
+      startRecording(stream);
+      t0Ref.current = Date.now();
+      sendAudioFrame(stream, ws, t0Ref.current).then(sender => {
+        audioSenderRef.current = sender;
+      });
+      videoIntervalRef.current = window.setInterval(() => {
+        if (videoRef.current && ws.readyState === WebSocket.OPEN) {
+          sendVideoFrame(videoRef.current, ws, t0Ref.current);
+        }
+      }, 100);
     },
   });
 
   const skipPermission = usePlaySession((s) => s.skipPermission);
   const session_id = usePlaySession((state) => state.session_id);
- 
+  const setCurrentMeasureIndex = usePlaySession((s) => s.setCurrentMeasureIndex);
+
+  useEffect(() => {
+    setCurrentMeasureIndex(progress.currentBarIndex + 1);
+
+    // currentBarIndex === 0은 연주 시작 시점 — 첫 번째 마디가 끝나기 전이므로 전송 안 함
+    if (!ws || progress.currentBarIndex === 0) return;
+
+    // currentBarIndex가 N으로 바뀌었다 = N번째 마디(1-indexed)가 방금 완료됨
+    const measureIndex = progress.currentBarIndex;
+
+    const send = () => {
+      ws.send(JSON.stringify({ type: 'measure', measure_index: measureIndex }));
+      console.log('sended measure index: ', measureIndex);
+    };
+
+    if (ws.readyState === WebSocket.OPEN) {
+      send();
+    } else {
+      ws.addEventListener('open', send, { once: true });
+      return () => ws.removeEventListener('open', send);
+    }
+  }, [progress.currentBarIndex, setCurrentMeasureIndex, ws]);
+
+  // 곡 종료 시 마지막 마디 전송 — currentBarIndex는 TOTAL_BARS-1로 클램핑돼 변하지 않으므로 별도 처리
+  useEffect(() => {
+    if (!ws || !progress.isFinished) return;
+
+    const measureIndex = progress.TOTAL_BARS;
+    const send = () => {
+      ws.send(JSON.stringify({ type: 'measure', measure_index: measureIndex }));
+      console.log('sended measure index (final): ', measureIndex);
+    };
+
+    if (ws.readyState === WebSocket.OPEN) {
+      send();
+    } else {
+      ws.addEventListener('open', send, { once: true });
+      return () => ws.removeEventListener('open', send);
+    }
+  }, [progress.isFinished, ws, progress.TOTAL_BARS]);
+
+  useEffect(() => {
+    if (!ws) return;
+    ws.onmessage = (e) => {
+      console.log('ws message:', e.data);
+      try {
+        const msg = JSON.parse(e.data) as WsFeedbackMessage;
+        const barIndex = msg.measure_index - 1;
+
+        if (msg.type === 'feedback') {
+          if (!Array.isArray(msg.items) || msg.items.length === 0) return;
+          setLatestFeedbacks(msg.items.map(itemToFeedback));
+          if (barIndex >= 0) {
+            const newMarks: Mark[] = msg.items
+              .filter((item) => item.domain != null)
+              .map((item) => ({
+                area: item.domain,
+                supervisor: item.action === 'CALL_SUPERVISOR',
+                message: item.feedback,
+              }));
+            if (newMarks.length > 0) {
+              setLiveMarksByBar((prev) => new Map(prev).set(barIndex, newMarks));
+            }
+          }
+        } else if (msg.type === 'feedback_update') {
+          const { item } = msg;
+          setLatestFeedbacks([itemToFeedback(item)]);
+          if (barIndex >= 0 && item.domain) {
+            setLiveMarksByBar((prev) =>
+              new Map(prev).set(barIndex, [{
+                area: item.domain,
+                supervisor: item.action === 'CALL_SUPERVISOR',
+                message: item.feedback,
+              }])
+            );
+          }
+        }
+      } catch { /* not JSON */ }
+    };
+  }, [ws]);
+
   // 이미 stream 있을 때 호출
   const startRecording = (stream: MediaStream) => {
     // 오디오 전용 스트림 분리
@@ -144,6 +270,37 @@ function PlayPageInner({ song }: { song: ScoreData }) {
 
   const finishCalledRef = useRef(false);
 
+  useEffect(() => {
+    if (!progress.isFinished) return;
+    if (videoIntervalRef.current !== null) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
+    audioSenderRef.current?.audioContext.close();
+    audioSenderRef.current = null;
+  }, [progress.isFinished]);
+
+  useEffect(() => {
+    if (!progress.introDone || progress.isFinished) return;
+
+    if (!progress.isPlaying) {
+      if (videoIntervalRef.current !== null) {
+        clearInterval(videoIntervalRef.current);
+        videoIntervalRef.current = null;
+      }
+      audioSenderRef.current?.audioContext.suspend();
+    } else {
+      audioSenderRef.current?.audioContext.resume();
+      if (videoIntervalRef.current === null && videoRef.current && ws) {
+        videoIntervalRef.current = window.setInterval(() => {
+          if (videoRef.current && ws.readyState === WebSocket.OPEN) {
+            sendVideoFrame(videoRef.current, ws, t0Ref.current);
+          }
+        }, 100);
+      }
+    }
+  }, [progress.isPlaying, progress.introDone, progress.isFinished, ws]);
+
   // "다시 연주"로 들어온 경우 권한 화면을 건너뛰고 바로 연주 준비(전주)로 진입
   useEffect(() => {
     if (skipPermission) requestPermission();
@@ -159,6 +316,11 @@ function PlayPageInner({ song }: { song: ScoreData }) {
     finishCalledRef.current = true;
     try {
       if (session_id && activeFocusBar === null) {
+        if (videoIntervalRef.current !== null) {
+          clearInterval(videoIntervalRef.current);
+          videoIntervalRef.current = null;
+        }
+
         const [audioBlob, videoBlob] = await Promise.all([
           stopAudio(),
           stopVideo(),
@@ -188,6 +350,12 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       alert('세션 아이디 저장 오류');
       return;
     }
+    if (videoIntervalRef.current !== null) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
+    audioSenderRef.current?.audioContext.close();
+    audioSenderRef.current = null;
     const res = await abortSession(session_id);
     console.log(res);
 
@@ -221,18 +389,21 @@ function PlayPageInner({ song }: { song: ScoreData }) {
       key={`play-${activeFocusBar ?? 'normal'}`}
       progress={progress}
       stream={stream}
+      videoRef={videoRef}
       focusBar={activeFocusBar}
       focusBars={focusBars}
       focusIdx={focusIdx}
       onSelectFocusIdx={setFocusIdx}
       onFinish={handleFinish}
-      onExit={() => handleExit(session_id)}      
+      onExit={() => handleExit(session_id)}
       songTitle={song.song.title}
       bars={toBars(song.measures)}
       lyrics={toLyrics(song.measures)}
       bpm={song.song.bpm}
       beatsPerBarCount={beatsPerBar(song.song.time_signature)}
       duration={toDuration(song.measures)}
+      latestFeedbacks={latestFeedbacks}
+      liveMarksByBar={liveMarksByBar}
     />
   );
 }
@@ -431,6 +602,7 @@ function CountInOverlay({
 function PlayingView({
   stream,
   progress,
+  videoRef,
   focusBar,
   focusBars,
   focusIdx,
@@ -443,9 +615,12 @@ function PlayingView({
   bpm,
   beatsPerBarCount,
   duration,
+  latestFeedbacks,
+  liveMarksByBar,
 }: {
   stream: MediaStream | null;
   progress: ReturnType<typeof usePlayProgress>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   focusBar: number | null;
   focusBars: number[];
   focusIdx: number;
@@ -458,6 +633,8 @@ function PlayingView({
   bpm: number;
   beatsPerBarCount: number;
   duration: string[][];
+  latestFeedbacks: Feedback[];
+  liveMarksByBar: Map<number, Mark[]>;
 }) {
   const { mode, partner } = usePlaySession();
   const isEnsemble = mode === 'ensemble' && !!partner;
@@ -481,15 +658,8 @@ function PlayingView({
 
   const isPlaying = introDone && !isFinished && progress.isPlaying;
 
-  const currentMarks = useMemo(
-    () => currentMarksUpToWindow(currentWindowIndex),
-    [currentWindowIndex],
-  );
+  const currentMarks = useMemo(() => new Map(liveMarksByBar), [liveMarksByBar]);
 
-  const currentFeedbacks = useMemo(
-    () => FEEDBACK_SEQUENCE[currentWindowIndex] ?? [],
-    [currentWindowIndex],
-  );
 
   const prev_measures = prevSessionRecord((state) => state.measures);
 
@@ -504,11 +674,8 @@ function PlayingView({
   );
 
   const isPostureAlert = useMemo(
-    () =>
-      currentFeedbacks.some(
-        (fb) => fb.tone === 'normal' && fb.area === 'posture',
-      ),
-    [currentFeedbacks],
+    () => latestFeedbacks.some(fb => fb.tone === 'normal' && fb.area === 'posture'),
+    [latestFeedbacks],
   );
   // useEffect(() => {
   //   if(isFinished && focused) onFinish();
@@ -592,7 +759,7 @@ function PlayingView({
 
         <div className="grid items-stretch gap-4 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <CameraStage stream={stream} alertPosture={isPostureAlert} />
+            <CameraStage stream={stream} alertPosture={isPostureAlert} videoRef={videoRef} />
 
             {isEnsemble && (
               <PartnerAudioBar
@@ -640,8 +807,8 @@ function PlayingView({
 
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <CurrentFeedback
-                feedbacks={currentFeedbacks}
-                barIndex={currentWindowIndex}
+                feedbacks={latestFeedbacks}
+                barIndex={currentBarIndex}
               />
               <FeedbackCaption tone="current" />
             </div>
@@ -731,19 +898,22 @@ function CameraStage({
   stream,
   alertPosture = false,
   duet = false,
+  videoRef: externalRef,
 }: {
   stream: MediaStream | null;
   alertPosture?: boolean;
   /** 협주 좌우 이분할 모드 — 컬럼 높이를 채우고 푸터를 숨긴다. */
   duet?: boolean;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
 }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const internalRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = externalRef ?? internalRef;
 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
     }
-  }, [stream]);
+  }, [stream, videoRef]);
 
   return (
     <div
@@ -758,7 +928,7 @@ function CameraStage({
       <div className={`relative bg-foreground ${duet ? 'min-h-0 flex-1' : 'aspect-video'}`}>
         {stream ? (
           <video
-            ref={videoRef}
+            ref={videoRef as React.RefObject<HTMLVideoElement>}
             autoPlay
             muted
             playsInline
@@ -951,12 +1121,15 @@ function SheetStage({
 
 
 
+const RAINBOW_GRADIENT = 'linear-gradient(135deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #a78bfa)';
+
 /** 영역 배지 — 아이콘 + 영역 이름 (음정/박자/자세) */
-function AreaBadge({ area }: { area: Area }) {
+function AreaBadge({ area, rainbow = false }: { area: Area; rainbow?: boolean }) {
   const Icon = AREA_ICON[area];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${AREA_DOT[area]}`}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${rainbow ? '' : AREA_DOT[area]}`}
+      style={rainbow ? { background: RAINBOW_GRADIENT } : undefined}
     >
       <Icon className="h-3.5 w-3.5" />
       {AREA_KO[area]}
@@ -1000,14 +1173,23 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
     );
   }
 
-  // 슈퍼바이저 코칭(폴백) — 영역색·영역 배지 없는 중립 카드.
+  // 슈퍼바이저 코칭 — area가 있으면 무지개 area 배지, 없으면 '코치' 무지개 배지.
   if (feedbacks.length === 1 && feedbacks[0].tone === 'supervisor') {
+    const fb = feedbacks[0];
+    const isRainbow = fb.action === 'CALL_SUPERVISOR';
     return (
       <div key={`fb-${barIndex}`} className={`${FEEDBACK_BASE} border border-border bg-muted/50`}>
-        <span className="inline-flex items-center gap-1 rounded-md bg-foreground/80 px-2 py-1 text-xs font-bold text-background">
-          코치
-        </span>
-        <p className="text-lg font-bold leading-snug tracking-tight">{feedbacks[0].message}</p>
+        {fb.area ? (
+          <AreaBadge area={fb.area} rainbow={isRainbow} />
+        ) : (
+          <span
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${isRainbow ? '' : 'bg-foreground/80'}`}
+            style={isRainbow ? { background: RAINBOW_GRADIENT } : undefined}
+          >
+            코치
+          </span>
+        )}
+        <p className="text-lg font-bold leading-snug tracking-tight">{fb.message}</p>
       </div>
     );
   }

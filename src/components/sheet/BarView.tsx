@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { PITCH_Y, type Bar as BarType, type Pitch } from '@/api/songs/song.type';
 import { markBorderClass, markClass, type Mark } from '@/data/session';
 import { type Area, AREA_KO, AREA_DOT } from '@/lib/area';
@@ -184,10 +185,15 @@ function MarkRow({
 }) {
   const curr = current.find((m) => m.area === area);
   const prev = previous.find((m) => m.area === area);
-  // 이번=꽉 참(색칠) / 이전=외곽선(테두리) / 없음(GOOD)=옅은 회색 트랙. '형태'로 시간을 구분.
-  // 같은 영역에 둘 다 있으면 현재 색칠 위에 과거 테두리를 덧입혀 둘 다 보이게 한다.
+
+  const isRainbow = curr?.supervisor === true;
+
   let barClass: string;
-  if (curr && prev) {
+  let style: CSSProperties | undefined;
+  if (isRainbow) {
+    barClass = prev ? markBorderClass(area) : '';
+    style = { background: 'linear-gradient(90deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #a78bfa)' };
+  } else if (curr && prev) {
     barClass = `${markClass(area, 'current')} ${markBorderClass(area)}`;
   } else if (curr) {
     barClass = markClass(area, 'current');
@@ -198,7 +204,7 @@ function MarkRow({
   }
   return (
     <div className="flex h-4 items-center">
-      <div className={`h-2.5 w-full rounded-sm ${barClass}`} />
+      <div className={`h-2.5 w-full rounded-sm ${barClass}`} style={style} />
     </div>
   );
 }

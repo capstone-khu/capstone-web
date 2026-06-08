@@ -103,3 +103,9 @@ export const getSessionResult = async (session_id: number) : Promise<SessionResu
   console.log(response.data);
   return response.data.data;
 };
+
+export const getSessionDetail = async (session_id: number, measure_index: number) => {
+  const response = await api.get(`/sessions/${session_id}/measures/${measure_index}`);
+  console.log(response.data);
+  return response.data;
+}
