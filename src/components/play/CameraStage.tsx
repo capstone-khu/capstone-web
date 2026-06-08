@@ -1,12 +1,5 @@
 import { useEffect, useRef } from 'react';
 
-const canvas = document.createElement('canvas');
-const ctx = canvas.getContext('2d');
-
-function sendFrame(video) {
-  
-}
-
 export function CameraStage({
   stream,
   alertPosture = false,
