@@ -7,8 +7,6 @@ import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import {
-  FEEDBACK_SEQUENCE,
-  currentMarksUpToWindow,
   previousCautionsForWindow,
   previousMarksByBar,
   type Caution,
@@ -28,6 +26,32 @@ import { abortSession, completeSession} from '@/api/session';
 import { prevSessionRecord } from '@/store/usePlaySession';
 import { sendVideoFrame, sendAudioFrame } from '@/api/socket';
 
+type WsFeedbackItem = {
+  domain: Area;
+  action_id: string;
+  action: string;
+  feedback: string;
+};
+
+type WsFeedbackMessage =
+  | { type: 'feedback'; measure_index: number; items: WsFeedbackItem[] }
+  | { type: 'feedback_update'; measure_index: number; item: WsFeedbackItem };
+
+function itemToFeedback(item: WsFeedbackItem): Feedback {
+  if (item.action === 'CALL_SUPERVISOR') {
+    return {
+      tone: 'supervisor',
+      message: item.feedback,
+      action: 'CALL_SUPERVISOR',
+      ...(item.domain ? { area: item.domain } : {}),
+    };
+  }
+  if (item.action?.startsWith('POSITIVE')) {
+    return { tone: 'positive', message: item.feedback };
+  }
+  return { tone: 'normal', area: item.domain, message: item.feedback };
+}
+
 export default function PlayPage() {
   const { id } = useParams();
   // const socketRef = useRef<WebSocket | null>(null);
@@ -44,9 +68,6 @@ export default function PlayPage() {
         'state',
         ws.readyState
       );
-    };
-    ws.onmessage = (e) => {
-      console.log(e.data);
     };
     ws.onclose = (e) => {
       console.log(e.code);
@@ -70,6 +91,8 @@ export default function PlayPage() {
 
 function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) {
   const [focusIdx, setFocusIdx] = useState(0);
+  const [latestFeedbacks, setLatestFeedbacks] = useState<Feedback[]>([]);
+  const [liveMarksByBar, setLiveMarksByBar] = useState<Map<number, Mark[]>>(new Map());
   const audioRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -146,6 +169,46 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
       return () => ws.removeEventListener('open', send);
     }
   }, [progress.isFinished, ws, progress.TOTAL_BARS]);
+
+  useEffect(() => {
+    if (!ws) return;
+    ws.onmessage = (e) => {
+      console.log('ws message:', e.data);
+      try {
+        const msg = JSON.parse(e.data) as WsFeedbackMessage;
+        const barIndex = msg.measure_index - 1;
+
+        if (msg.type === 'feedback') {
+          if (!Array.isArray(msg.items) || msg.items.length === 0) return;
+          setLatestFeedbacks(msg.items.map(itemToFeedback));
+          if (barIndex >= 0) {
+            const newMarks: Mark[] = msg.items
+              .filter((item) => item.domain != null)
+              .map((item) => ({
+                area: item.domain,
+                supervisor: item.action === 'CALL_SUPERVISOR',
+                message: item.feedback,
+              }));
+            if (newMarks.length > 0) {
+              setLiveMarksByBar((prev) => new Map(prev).set(barIndex, newMarks));
+            }
+          }
+        } else if (msg.type === 'feedback_update') {
+          const { item } = msg;
+          setLatestFeedbacks([itemToFeedback(item)]);
+          if (barIndex >= 0 && item.domain) {
+            setLiveMarksByBar((prev) =>
+              new Map(prev).set(barIndex, [{
+                area: item.domain,
+                supervisor: item.action === 'CALL_SUPERVISOR',
+                message: item.feedback,
+              }])
+            );
+          }
+        }
+      } catch { /* not JSON */ }
+    };
+  }, [ws]);
 
   // 이미 stream 있을 때 호출
   const startRecording = (stream: MediaStream) => {
@@ -339,6 +402,8 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
       bpm={song.song.bpm}
       beatsPerBarCount={beatsPerBar(song.song.time_signature)}
       duration={toDuration(song.measures)}
+      latestFeedbacks={latestFeedbacks}
+      liveMarksByBar={liveMarksByBar}
     />
   );
 }
@@ -550,6 +615,8 @@ function PlayingView({
   bpm,
   beatsPerBarCount,
   duration,
+  latestFeedbacks,
+  liveMarksByBar,
 }: {
   stream: MediaStream | null;
   progress: ReturnType<typeof usePlayProgress>;
@@ -566,6 +633,8 @@ function PlayingView({
   bpm: number;
   beatsPerBarCount: number;
   duration: string[][];
+  latestFeedbacks: Feedback[];
+  liveMarksByBar: Map<number, Mark[]>;
 }) {
   const { mode, partner } = usePlaySession();
   const isEnsemble = mode === 'ensemble' && !!partner;
@@ -589,15 +658,8 @@ function PlayingView({
 
   const isPlaying = introDone && !isFinished && progress.isPlaying;
 
-  const currentMarks = useMemo(
-    () => currentMarksUpToWindow(currentWindowIndex),
-    [currentWindowIndex],
-  );
+  const currentMarks = useMemo(() => new Map(liveMarksByBar), [liveMarksByBar]);
 
-  const currentFeedbacks = useMemo(
-    () => FEEDBACK_SEQUENCE[currentWindowIndex] ?? [],
-    [currentWindowIndex],
-  );
 
   const prev_measures = prevSessionRecord((state) => state.measures);
 
@@ -612,11 +674,8 @@ function PlayingView({
   );
 
   const isPostureAlert = useMemo(
-    () =>
-      currentFeedbacks.some(
-        (fb) => fb.tone === 'normal' && fb.area === 'posture',
-      ),
-    [currentFeedbacks],
+    () => latestFeedbacks.some(fb => fb.tone === 'normal' && fb.area === 'posture'),
+    [latestFeedbacks],
   );
   // useEffect(() => {
   //   if(isFinished && focused) onFinish();
@@ -748,8 +807,8 @@ function PlayingView({
 
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <CurrentFeedback
-                feedbacks={currentFeedbacks}
-                barIndex={currentWindowIndex}
+                feedbacks={latestFeedbacks}
+                barIndex={currentBarIndex}
               />
               <FeedbackCaption tone="current" />
             </div>
@@ -1062,12 +1121,15 @@ function SheetStage({
 
 
 
+const RAINBOW_GRADIENT = 'linear-gradient(135deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #a78bfa)';
+
 /** 영역 배지 — 아이콘 + 영역 이름 (음정/박자/자세) */
-function AreaBadge({ area }: { area: Area }) {
+function AreaBadge({ area, rainbow = false }: { area: Area; rainbow?: boolean }) {
   const Icon = AREA_ICON[area];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${AREA_DOT[area]}`}
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${rainbow ? '' : AREA_DOT[area]}`}
+      style={rainbow ? { background: RAINBOW_GRADIENT } : undefined}
     >
       <Icon className="h-3.5 w-3.5" />
       {AREA_KO[area]}
@@ -1111,14 +1173,23 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
     );
   }
 
-  // 슈퍼바이저 코칭(폴백) — 영역색·영역 배지 없는 중립 카드.
+  // 슈퍼바이저 코칭 — area가 있으면 무지개 area 배지, 없으면 '코치' 무지개 배지.
   if (feedbacks.length === 1 && feedbacks[0].tone === 'supervisor') {
+    const fb = feedbacks[0];
+    const isRainbow = fb.action === 'CALL_SUPERVISOR';
     return (
       <div key={`fb-${barIndex}`} className={`${FEEDBACK_BASE} border border-border bg-muted/50`}>
-        <span className="inline-flex items-center gap-1 rounded-md bg-foreground/80 px-2 py-1 text-xs font-bold text-background">
-          코치
-        </span>
-        <p className="text-lg font-bold leading-snug tracking-tight">{feedbacks[0].message}</p>
+        {fb.area ? (
+          <AreaBadge area={fb.area} rainbow={isRainbow} />
+        ) : (
+          <span
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-background ${isRainbow ? '' : 'bg-foreground/80'}`}
+            style={isRainbow ? { background: RAINBOW_GRADIENT } : undefined}
+          >
+            코치
+          </span>
+        )}
+        <p className="text-lg font-bold leading-snug tracking-tight">{fb.message}</p>
       </div>
     );
   }
