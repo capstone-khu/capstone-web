@@ -32,7 +32,7 @@ export default function MyPage() {
   const startEnsemble = usePlaySession((s) => s.startEnsemble);
 
   // 연주 이력 조회 데이터
-  const { items, size, loading: recordLoading } = useRecordHistory();  
+  const { items, size, total, loading: recordLoading } = useRecordHistory(page);  
   // 협주 영상 조회 데이터 
   const {
     data: duetVideo,
@@ -46,11 +46,8 @@ export default function MyPage() {
 
   
   // pagination 연산 
-  const pageCount = Math.ceil(items.length / size);
-  const pagedItems = items.slice(
-    (page - 1) * size,
-    page * size
-  );
+  const pageCount = Math.ceil(total / size);
+  const pagedItems = items;
 
 
   const handleLogout = () => {
@@ -167,8 +164,8 @@ export default function MyPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
               >
                 이전
               </Button>
@@ -177,8 +174,8 @@ export default function MyPage() {
                   <button
                     key={i}
                     type="button"
-                    aria-label={`${i}페이지`}
-                    onClick={() => setPage(i)}
+                    aria-label={`${i + 1}페이지`}
+                    onClick={() => setPage(i + 1)}
                     className={`h-2 w-2 rounded-full transition-colors ${
                       i + 1 === page ? 'bg-foreground' : 'bg-gray-300'
                     }`}
@@ -188,8 +185,8 @@ export default function MyPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={page === pageCount - 1}
-                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                disabled={page === pageCount}
+                onClick={() => setPage((p) => p + 1)}
               >
                 다음
               </Button>
