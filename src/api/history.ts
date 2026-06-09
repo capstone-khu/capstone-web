@@ -29,5 +29,7 @@ export interface RecordingsData {
 // 연주 이력 조회
 export const getRecordHistory = async (): Promise<RecordingsData> => {
   const response = await api.get('/me/history')
+
+  console.log("연주 이력 조회: ", response)
   return response.data.data;
 };

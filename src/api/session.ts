@@ -32,7 +32,7 @@ export const createSession = async (data : createSessionRequest) : Promise<creat
 export const abortSession = async (session_id : number) => {
     console.log(`session id: ${session_id}`)
     const response = await api.post(`/sessions/${session_id}/abort`);
-    console.log(response);
+    console.log("세션 중도 종료: ", response);
     return response.data;
 }
 
@@ -57,6 +57,8 @@ export const completeSession = async (
     }
   );
 
+
+  console.log("세션 종료: ", response);
   return response.data;
 };
 
@@ -64,7 +66,7 @@ export const completeSession = async (
 export const getPreviousMarking = async (session_id:number) => {
     console.log(`session id: ${session_id}`);
     const response = await api.get(`/sessions/${session_id}/previous-markings`);
-    console.log(response);
+    console.log("직전 세션 마킹 조회: ", response);
     return response.data;
 }
 
@@ -100,12 +102,12 @@ export const getSessionResult = async (session_id: number) : Promise<SessionResu
   const response = await api.get(
     `/sessions/${session_id}/result`
   );
-  console.log(response.data);
+  console.log("세션 결과 마킹 조회: ", response.data);
   return response.data.data;
 };
 
 export const getSessionDetail = async (session_id: number, measure_index: number) => {
   const response = await api.get(`/sessions/${session_id}/measures/${measure_index}`);
-  console.log(response.data);
+  console.log("세션 디테일: ", response.data);
   return response.data;
 }
