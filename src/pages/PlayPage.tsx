@@ -7,9 +7,7 @@ import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import {
-  previousCautionsForWindow,
   previousMarksByBar,
-  type Caution,
   type Feedback,
   type Mark,
 } from '@/data/session';
@@ -37,12 +35,13 @@ type WsFeedbackMessage =
   | { type: 'feedback'; measure_index: number; items: WsFeedbackItem[] }
   | { type: 'feedback_update'; measure_index: number; item: WsFeedbackItem };
 
-function itemToFeedback(item: WsFeedbackItem): Feedback {
+function itemToFeedback(item: WsFeedbackItem, isUpdate = false): Feedback {
   if (item.action === 'CALL_SUPERVISOR') {
     return {
       tone: 'supervisor',
       message: item.feedback,
       action: 'CALL_SUPERVISOR',
+      isUpdated: isUpdate,
       ...(item.domain ? { area: item.domain } : {}),
     };
   }
@@ -180,7 +179,7 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
 
         if (msg.type === 'feedback') {
           if (!Array.isArray(msg.items) || msg.items.length === 0) return;
-          setLatestFeedbacks(msg.items.map(itemToFeedback));
+          setLatestFeedbacks(msg.items.map((item) => itemToFeedback(item)));
           if (barIndex >= 0) {
             const newMarks: Mark[] = msg.items
               .filter((item) => item.domain != null)
@@ -195,7 +194,7 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
           }
         } else if (msg.type === 'feedback_update') {
           const { item } = msg;
-          setLatestFeedbacks([itemToFeedback(item)]);
+          setLatestFeedbacks([itemToFeedback(item, true)]);
           if (barIndex >= 0 && item.domain) {
             setLiveMarksByBar((prev) =>
               new Map(prev).set(barIndex, [{
@@ -647,7 +646,6 @@ function PlayingView({
     introDone,
     currentBarIndex,
     progressInBar,
-    currentWindowIndex,
     focusLoopRound,
     TOTAL_BARS,
     FOCUS_LOOPS,
@@ -664,14 +662,19 @@ function PlayingView({
   const prev_measures = prevSessionRecord((state) => state.measures);
 
   const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => (
-    {window: m.measure_index, marks: m.markings.map((mk => ({area: mk.domain, message: mk.feedbck})))}
+    {window: m.measure_index, marks: m.markings.map((mk => ({area: mk.domain, message: mk.feedback})))}
   ))
 
   const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
-  const previousCautions = useMemo(
-    () => previousCautionsForWindow(currentWindowIndex, PREVIOUS_SESSION_MARKS),
-    [currentWindowIndex],
-  );
+  const previousBarFeedbacks = useMemo<Feedback[]>(() => {
+    const measure = prev_measures.find((m) => m.measure_index === currentBarIndex + 1);
+    if (!measure || measure.markings.length === 0) return [];
+    return measure.markings.map((mk) => ({
+      tone: 'normal' as const,
+      area: mk.domain,
+      message: mk.feedback,
+    }));
+  }, [prev_measures, currentBarIndex]);
 
   const isPostureAlert = useMemo(
     () => latestFeedbacks.some(fb => fb.tone === 'normal' && fb.area === 'posture'),
@@ -801,7 +804,7 @@ function PlayingView({
         ) : (
           <section className="flex items-stretch gap-3">
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <PreviousCaution cautions={previousCautions} />
+              <PreviousFeedback feedbacks={previousBarFeedbacks} barIndex={currentBarIndex} />
               <FeedbackCaption tone="previous" />
             </div>
 
@@ -1150,9 +1153,18 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
     return (
       <div
         key={`empty-${barIndex}`}
-        className="animate-feedback-in flex min-h-[110px] min-w-0 flex-1 items-center justify-center rounded-2xl border border-dashed border-border bg-background px-5 text-sm text-muted-foreground"
+        className="animate-feedback-in flex min-h-[110px] min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background px-5 text-sm text-muted-foreground"
       >
-        다음 마디의 피드백을 분석 중…
+        <p>다음 마디의 피드백을 분석 중</p>
+        <div className="flex gap-1.5">
+          {[0, 150, 300].map((d) => (
+            <span
+              key={d}
+              className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground"
+              style={{ animationDelay: `${d}ms` }}
+            />
+          ))}
+        </div>
       </div>
     );
   }
@@ -1189,7 +1201,23 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
             코치
           </span>
         )}
-        <p className="text-lg font-bold leading-snug tracking-tight">{fb.message}</p>
+        {isRainbow && !fb.isUpdated ? (
+          <div className="flex gap-1.5">
+            {[0, 150, 300].map((d) => (
+              <span
+                key={d}
+                className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground"
+                style={{ animationDelay: `${d}ms` }}
+              />
+            ))}
+          </div>
+        ) : (
+          <p
+            className={`text-lg font-bold leading-snug tracking-tight${isRainbow && fb.isUpdated ? ' animate-feedback-in' : ''}`}
+          >
+            {fb.message}
+          </p>
+        )}
       </div>
     );
   }
@@ -1235,37 +1263,40 @@ function FeedbackCaption({ tone }: { tone: 'previous' | 'current' }) {
   return <p className="text-center text-sm font-bold text-foreground">현재 연주 피드백이에요!</p>;
 }
 
-/**
- * 지난 연주 피드백 — 라이브 피드백보다 조용하게(ghost·점선). 블록 안은 현재 피드백과
- * 동일하게 중앙정렬(배지 + 메시지). 여러 마킹은 한 카드에 묶어 과밀을 막는다.
- */
-function PreviousCaution({ cautions }: { cautions: Caution[] }) {
-  // 위치 고정 — 비어도 자리를 지키고 '없음'을 명시.
-  if (cautions.length === 0) {
+
+const PREV_BASE =
+  'animate-feedback-in flex min-h-[110px] min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border px-5 py-4 text-center';
+
+function PreviousFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIndex: number }) {
+  if (feedbacks.length === 0) {
     return (
-      <div className="flex min-h-[110px] min-w-0 flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-border bg-muted/40 px-5 text-center text-sm text-muted-foreground">
-        이 구간은 지난 연주에 받은 피드백이 없어요
+      <div className={`${PREV_BASE} bg-muted/40 text-sm text-muted-foreground`}>
+        이 마디는 직전 연주 피드백이 없어요
       </div>
     );
   }
-  // 현재 피드백과 글씨 크기 규칙 통일 — 다중이면 text-base, 단일이면 text-xl.
-  const multi = cautions.length > 1;
+
+  const issues = feedbacks.filter(
+    (fb): fb is Extract<Feedback, { tone: 'normal' }> => fb.tone === 'normal',
+  );
+  const multi = issues.length > 1;
+
   return (
-    <div className="animate-feedback-in flex min-h-[110px] min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/40 px-4 py-4 text-center">
-      {cautions.map((c, i) => (
+    <div key={`prev-${barIndex}`} className={`${PREV_BASE} bg-muted/40`}>
+      {issues.map((fb, i) => (
         <div
           key={i}
           className={`flex flex-col items-center gap-1.5 ${
             i > 0 ? 'w-full border-t border-border/60 pt-3' : ''
           }`}
         >
-          <AreaBadge area={c.area} />
+          <AreaBadge area={fb.area} />
           <p
             className={`font-bold leading-snug tracking-tight text-muted-foreground ${
               multi ? 'text-base' : 'text-xl'
             }`}
           >
-            {c.message}
+            {fb.message}
           </p>
         </div>
       ))}
