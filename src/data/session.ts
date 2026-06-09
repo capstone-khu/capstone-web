@@ -11,7 +11,7 @@ export type Mark = { area: Area; severity?: Severity; message?: string; supervis
 export type Feedback =
   | { tone: 'normal'; area: Area; message: string; mark?: Mark; reward?: number }
   | { tone: 'positive'; message: string }
-  | { tone: 'supervisor'; message: string; action?: string; area?: Area };
+  | { tone: 'supervisor'; message: string; action?: string; area?: Area; isUpdated?: boolean };
 
 /** 분석 단위: 3마디 = 한 윈도우. 한 윈도우에 하나의 피드백/마킹이 적용됨. */
 export const ANALYSIS_WINDOW_BARS = 3;

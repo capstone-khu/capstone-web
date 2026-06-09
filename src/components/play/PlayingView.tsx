@@ -76,7 +76,7 @@ export function PlayingView({
   const prev_measures = prevSessionRecord((state) => state.measures);
 
   const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => (
-    { window: m.measure_index, marks: m.markings.map((mk => ({ area: mk.domain, message: mk.feedbck }))) }
+    { window: m.measure_index, marks: m.markings.map((mk => ({ area: mk.domain, message: mk.feedback }))) }
   ));
 
   const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);

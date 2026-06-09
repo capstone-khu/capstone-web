@@ -82,7 +82,7 @@ export const usePlaySession = create<PlaySessionState>((set) => ({
 interface IMark {
   domain: Area,
   action_id: string,
-  feedbck: string,
+  feedback: string,
 }
 interface IMeasure {
   measure_index: number,
