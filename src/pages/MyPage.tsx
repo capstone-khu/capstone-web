@@ -32,7 +32,7 @@ export default function MyPage() {
   const startEnsemble = usePlaySession((s) => s.startEnsemble);
 
   // 연주 이력 조회 데이터
-  const { items, size, total, loading: recordLoading } = useRecordHistory();
+  const { items, size, loading: recordLoading } = useRecordHistory();  
   // 협주 영상 조회 데이터 
   const {
     data: duetVideo,
@@ -46,7 +46,7 @@ export default function MyPage() {
 
   
   // pagination 연산 
-  const pageCount = Math.ceil(total / size);
+  const pageCount = Math.ceil(items.length / size);
   const pagedItems = items.slice(
     (page - 1) * size,
     page * size
@@ -162,7 +162,7 @@ export default function MyPage() {
             ))}
           </ul>
 
-          {pageCount > 1 && (
+          {pageCount > 0 && (
             <div className="flex items-center justify-center gap-3 pt-1">
               <Button
                 variant="ghost"
@@ -178,9 +178,9 @@ export default function MyPage() {
                     key={i}
                     type="button"
                     aria-label={`${i}페이지`}
-                    onClick={() => setPage(i + 1)}
+                    onClick={() => setPage(i)}
                     className={`h-2 w-2 rounded-full transition-colors ${
-                      i === page ? 'bg-foreground' : 'bg-gray-300'
+                      i + 1 === page ? 'bg-foreground' : 'bg-gray-300'
                     }`}
                   />
                 ))}

@@ -4,7 +4,6 @@ import { getRecordHistory, RecordingItem } from '@/api/history';
 export function useRecordHistory() {
   const [items, setItems] = useState<RecordingItem[]>([]);
   const [size] = useState(3);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -15,7 +14,6 @@ export function useRecordHistory() {
         const data = await getRecordHistory();
 
         setItems(data.items);
-        setTotal(data.total);
       } finally {
         setLoading(false);
       }
@@ -27,7 +25,6 @@ export function useRecordHistory() {
   return {
     items,
     size,
-    total,
     loading,
   };
 }
