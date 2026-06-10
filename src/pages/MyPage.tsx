@@ -30,7 +30,6 @@ export default function MyPage() {
   const [videoOpen, setVideoOpen] = useState(false);
   const startFocus = usePlaySession((s) => s.startFocus);
   const startSolo = usePlaySession((s) => s.startSolo);
-  const startEnsemble = usePlaySession((s) => s.startEnsemble);
 
   // 연주 이력 조회 데이터
   const { items, size, total, loading: recordLoading } = useRecordHistory(page);  
@@ -132,16 +131,14 @@ export default function MyPage() {
                         <RepeatBarCoach
                           focusMeasures={item.focus_measures}
                           onStart={async () => {
-                            const res = await createSession({song_id: Number(item.song_id), mode: item.mode});
+                            // 집중 반복 레슨은 항상 솔로 세션으로 생성 —
+                            // 이력 응답에는 duet 세션 생성에 필요한 partner_recording_id가 없음
+                            const res = await createSession({ song_id: Number(item.song_id), mode: 'solo' });
                             if (!res.success) {
                               alert(res.message);
                               return;
                             }
-                            if (item.mode === 'solo') startSolo(res.data.session_id);
-                            else startEnsemble(res.data.session_id, {
-                              recordingId: String(item.duet_composite_id),
-                              userName: item.partner_name as string,
-                            });
+                            startSolo(res.data.session_id);
                             startFocus(item.focus_measures);
                             navigate(`/play/${item.song_id}`);
                           }}
