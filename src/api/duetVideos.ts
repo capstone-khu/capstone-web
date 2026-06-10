@@ -15,5 +15,7 @@ export const getDuetVideo = async (
   duetCompositeId: number
 ): Promise<DuetVideo> => {
   const response = await api.get(`/duet-videos/${duetCompositeId}`);
+
+  console.log("협주 영상 조회: ", response.data.data);
   return response.data.data;
 };
