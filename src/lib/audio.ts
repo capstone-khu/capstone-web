@@ -1,6 +1,5 @@
 import { PITCH_FREQ, type Pitch } from '@/api/songs/song.type';
 import { type ScoreData } from '@/api/songs/song.type';
-import { scoreMetadata } from './score_metadata'; 
 
 export interface MetadataNote {
   note: string;
@@ -37,28 +36,6 @@ function scheduleNote(ctx: AudioContext, freq: number, when: number, duration: n
   osc.connect(gain).connect(ctx.destination);
   osc.start(when);
   osc.stop(when + duration + 0.05);
-}
-
-/** 곡 전체 스케줄. startTime = ctx.currentTime 기준의 절대 시간(초). */
-export function scheduleSong(ctx: AudioContext, startTime: number, song: ScoreData) {
-  const beatsPerBar = Number(song.song.time_signature.split('/')[0]);
-  const beatSec = 60 / song.song.bpm;
-
-  const sorted = [...song.measures].sort((a, b) => a.measure_index - b.measure_index);
-
-  sorted.forEach((measure) => {
-    measure.notes.forEach((note) => {
-      const barIdx = measure.measure_index - 1; // measure_index는 1-based
-      const freq = PITCH_FREQ[note.pitch as Pitch];
-      if (!freq) return;
-
-      // note.position은 마디 안에서의 박자 위치 (0, 1, 2, 3...)
-      const when = startTime + (barIdx * beatsPerBar + note.position) * beatSec;
-      // duration은 note.duration 문자열 기반으로 계산
-      const duration = noteDurationSec(note.duration, beatSec);
-      scheduleNote(ctx, freq, when, duration * 0.9);
-    });
-  });
 }
 
 export function scheduleMetadataSong(

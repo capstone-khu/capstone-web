@@ -1,14 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppHeader } from '@/components/AppHeader';
 import { PitchIcon, RhythmIcon, PostureIcon } from '@/components/icons';
-import { SONG } from '@/data/song';
-import { liveSessionSummary } from '@/data/session';
-import { type Area, AREA_KO, AREA_TEXT, AREA_PILL } from '@/lib/area';
-import { getRecording } from '@/data/recordings';
-import { buildCoachReport } from '@/data/coach';
+import { type Area, AREA_KO, AREA_TEXT, AREA_PILL, AREAS } from '@/lib/area';
 import { getAiAnalysis } from '@/api/ai_analysis';
 
 type AiLevel = 'weak' | 'ok' | 'good';
@@ -46,16 +42,6 @@ function AreaIcon({ area, className }: { area: Area; className?: string }) {
  */
 export default function CoachPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const historyId = (location.state as { recordingId?: string } | null)?.recordingId ?? null;
-  const historyRec = historyId ? getRecording(historyId) : null;
-  const isHistory = !!historyRec;
-
-  const report = useMemo(
-    () => buildCoachReport(isHistory ? historyRec.summary : liveSessionSummary()),
-    [isHistory, historyRec],
-  );
   const [ai_report, setAiReport] = useState<AiReport | null>(null);
 
   // 영역 탭 — 기본은 가장 아쉬운 영역.
@@ -79,14 +65,14 @@ export default function CoachPage() {
     return () => clearTimeout(t);
   }, []);
 
-  const exitLabel = isHistory ? '목록으로' : '홈으로';
-  const exit = () => navigate(isHistory ? '/mypage' : '/');
+  const exitLabel = '홈으로';
+  const exit = () => navigate('/');
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <AppHeader
         onBack={() => navigate(-1)}
-        title={isHistory ? `${historyRec.date} 연주 · AI 상세 분석` : `AI 상세 분석 · ${SONG.title}`}
+        title={ai_report ? `AI 상세 분석 · #${ai_report.session_id}` : 'AI 상세 분석'}
         right={
           <Button size="sm" variant="outline" onClick={exit}>
             {exitLabel}
@@ -124,19 +110,19 @@ export default function CoachPage() {
           <section className="space-y-3">
             <h3 className="px-1 text-sm font-bold text-muted-foreground">영역별로 살펴봐요</h3>
             <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
-              {report.items.map((it) => (
+              {AREAS.map((area) => (
                 <button
-                  key={it.area}
+                  key={area}
                   type="button"
-                  onClick={() => setTab(it.area)}
+                  onClick={() => setTab(area)}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-bold transition-colors ${
-                    tab === it.area
-                      ? `bg-white shadow-sm ${AREA_TEXT[it.area]}`
+                    tab === area
+                      ? `bg-white shadow-sm ${AREA_TEXT[area]}`
                       : 'text-gray-400 hover:text-gray-600'
                   }`}
                 >
-                  <AreaIcon area={it.area} className="h-4 w-4" />
-                  {AREA_KO[it.area]}
+                  <AreaIcon area={area} className="h-4 w-4" />
+                  {AREA_KO[area]}
                 </button>
               ))}
             </div>

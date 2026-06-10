@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { SONG } from '@/data/song';
 import { scheduleMetronome } from '@/lib/audio';
 
 const INTRO_BEATS = 8;
-const INTRO_ACCENT_EVERY = SONG.beatsPerBar;
 
-function useMetronomeIntro(onDone: () => void) {
+function useMetronomeIntro(bpm: number, beatsPerBarCount: number, onDone: () => void) {
   const [currentBeat, setCurrentBeat] = useState(-1);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
-  const beatSec = 60 / SONG.bpm;
+  const beatSec = 60 / bpm;
   const totalDuration = INTRO_BEATS * beatSec;
 
   useEffect(() => {
@@ -25,7 +23,7 @@ function useMetronomeIntro(onDone: () => void) {
 
     ctx.resume().then(() => {
       startTimeRef.current = ctx.currentTime;
-      scheduleMetronome(ctx, startTimeRef.current, INTRO_BEATS, SONG.bpm, INTRO_ACCENT_EVERY);
+      scheduleMetronome(ctx, startTimeRef.current, INTRO_BEATS, bpm, beatsPerBarCount);
     });
 
     const tick = () => {
@@ -52,9 +50,17 @@ function useMetronomeIntro(onDone: () => void) {
   return currentBeat;
 }
 
-export function CountInOverlay({ onDone }: { onDone: () => void }) {
-  const currentBeat = useMetronomeIntro(onDone);
-  const beatInBar = currentBeat < 0 ? 1 : (currentBeat % SONG.beatsPerBar) + 1;
+export function CountInOverlay({
+  bpm,
+  beatsPerBarCount,
+  onDone,
+}: {
+  bpm: number;
+  beatsPerBarCount: number;
+  onDone: () => void;
+}) {
+  const currentBeat = useMetronomeIntro(bpm, beatsPerBarCount, onDone);
+  const beatInBar = currentBeat < 0 ? 1 : (currentBeat % beatsPerBarCount) + 1;
 
   return (
     <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 rounded-2xl bg-card/85 backdrop-blur-[2px]">
@@ -69,7 +75,7 @@ export function CountInOverlay({ onDone }: { onDone: () => void }) {
 
       <div className="flex items-center gap-3">
         {Array.from({ length: INTRO_BEATS }).map((_, i) => {
-          const isAccent = i % INTRO_ACCENT_EVERY === 0;
+          const isAccent = i % beatsPerBarCount === 0;
           const isActive = i === currentBeat;
           const isPast = i < currentBeat;
           const sizeCls = isAccent ? 'h-3.5 w-3.5' : 'h-2 w-2';

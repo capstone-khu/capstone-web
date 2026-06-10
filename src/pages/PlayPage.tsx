@@ -7,10 +7,10 @@ import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import {
-  previousMarksByBar,
   type Feedback,
   type Mark,
-} from '@/data/session';
+  previousMarksByMeasure,
+} from '@/lib/playFeedback';
 import { type Area, AREA_KO, AREA_DOT, AREA_ICON, AREA_BG_LIGHT } from '@/lib/area';
 import { scheduleMetronome } from '@/lib/audio';
 import { usePlaySession } from '@/store/usePlaySession';
@@ -661,11 +661,7 @@ function PlayingView({
 
   const prev_measures = prevSessionRecord((state) => state.measures);
 
-  const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => (
-    {window: m.measure_index, marks: m.markings.map((mk => ({area: mk.domain, message: mk.feedback})))}
-  ))
-
-  const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
+  const previousMarks = useMemo(() => previousMarksByMeasure(prev_measures), [prev_measures]);
   const previousBarFeedbacks = useMemo<Feedback[]>(() => {
     const measure = prev_measures.find((m) => m.measure_index === currentBarIndex + 1);
     if (!measure || measure.markings.length === 0) return [];
@@ -1304,4 +1300,3 @@ function PreviousFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barI
     </div>
   );
 }
-

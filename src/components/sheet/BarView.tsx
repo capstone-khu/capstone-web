@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { PITCH_Y, type Bar as BarType, type Pitch } from '@/api/songs/song.type';
-import { markBorderClass, markClass, type Mark } from '@/data/session';
+import { markBorderClass, markClass, type Mark } from '@/lib/playFeedback';
 import { type Area, AREA_KO, AREA_DOT } from '@/lib/area';
 
 type Props = {

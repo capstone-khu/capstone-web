@@ -1,6 +1,6 @@
 import { BarView, LaneGutter } from '@/components/sheet/BarView';
-import { LYRICS, SONG } from '@/data/song';
-import { type Mark } from '@/data/session';
+import { type Pitch } from '@/api/songs/song.type';
+import { type Mark } from '@/lib/playFeedback';
 import { CountInOverlay } from './CountInOverlay';
 
 export function SheetStage({
@@ -12,6 +12,11 @@ export function SheetStage({
   introActive,
   onIntroDone,
   focusBar,
+  bars,
+  lyrics,
+  bpm,
+  beatsPerBarCount,
+  duration,
 }: {
   currentBarIndex: number;
   progressInBar: number;
@@ -21,6 +26,11 @@ export function SheetStage({
   introActive: boolean;
   onIntroDone: () => void;
   focusBar: number | null;
+  bars: Pitch[][];
+  lyrics: string[][];
+  bpm: number;
+  beatsPerBarCount: number;
+  duration: string[][];
 }) {
   if (focusBar != null) {
     return (
@@ -35,18 +45,19 @@ export function SheetStage({
             <div className="min-w-0 flex-1">
               <BarView
                 barIndex={focusBar}
-                notes={SONG.bars[focusBar]}
+                notes={bars[focusBar]}
                 isCurrent={!isFinished}
                 progress={isFinished ? 0 : progressInBar}
                 previousMarks={previousMarks.get(focusBar) ?? []}
                 currentMarks={currentMarks.get(focusBar) ?? []}
-                lyrics={LYRICS[focusBar]}
+                lyrics={lyrics[focusBar]}
                 staffClassName="h-28"
+                duration={duration[focusBar]}
               />
             </div>
           </div>
         </div>
-        {introActive && <CountInOverlay onDone={onIntroDone} />}
+        {introActive && <CountInOverlay bpm={bpm} beatsPerBarCount={beatsPerBarCount} onDone={onIntroDone} />}
       </div>
     );
   }
@@ -54,10 +65,10 @@ export function SheetStage({
   const BARS_PER_ROW = 4;
   const ROWS_PER_PAGE = 1;
   const BARS_PER_PAGE = BARS_PER_ROW * ROWS_PER_PAGE;
-  const TOTAL_PAGES = Math.ceil(SONG.bars.length / BARS_PER_PAGE);
+  const TOTAL_PAGES = Math.ceil(bars.length / BARS_PER_PAGE);
   const pageIndex = Math.min(Math.floor(currentBarIndex / BARS_PER_PAGE), TOTAL_PAGES - 1);
   const pageStart = pageIndex * BARS_PER_PAGE;
-  const verseLabel = currentBarIndex < SONG.bars.length / 2 ? '1절' : '2절';
+  const verseLabel = currentBarIndex < bars.length / 2 ? '1절' : '2절';
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card">
@@ -83,8 +94,8 @@ export function SheetStage({
       >
         {Array.from({ length: ROWS_PER_PAGE }).map((_, r) => {
           const rowStart = pageStart + r * BARS_PER_ROW;
-          if (rowStart >= SONG.bars.length) return null;
-          const rowBars = SONG.bars.slice(rowStart, rowStart + BARS_PER_ROW);
+          if (rowStart >= bars.length) return null;
+          const rowBars = bars.slice(rowStart, rowStart + BARS_PER_ROW);
           return (
             <div key={r} className="flex w-full items-start gap-3">
               <LaneGutter staffSpacerClassName="h-24" />
@@ -101,8 +112,9 @@ export function SheetStage({
                       progress={isCurrent ? progressInBar : 0}
                       previousMarks={previousMarks.get(barIndex) ?? []}
                       currentMarks={currentMarks.get(barIndex) ?? []}
-                      lyrics={LYRICS[barIndex]}
+                      lyrics={lyrics[barIndex]}
                       staffClassName="h-24"
+                      duration={duration[barIndex]}
                     />
                   );
                 })}
@@ -112,7 +124,7 @@ export function SheetStage({
         })}
       </div>
 
-      {introActive && <CountInOverlay onDone={onIntroDone} />}
+      {introActive && <CountInOverlay bpm={bpm} beatsPerBarCount={beatsPerBarCount} onDone={onIntroDone} />}
     </div>
   );
 }

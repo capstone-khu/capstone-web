@@ -1,7 +1,7 @@
 // 전체 연주 엔진
 // 연주 진행 상태 관리 (진행 시간, 현재 마디/박자, 일시정지/재개 등)
 
-import { scheduleBarsLoop, scheduleMetadataSong, scheduleSong } from "@/lib/audio";
+import { scheduleBarsLoop, scheduleMetadataSong } from "@/lib/audio";
 import { useRef, useState, useEffect } from "react";
 import { type ScoreData } from "@/api/songs/song.type";
 import { scoreMetadata } from "@/lib/score_metadata";
@@ -115,7 +115,7 @@ export const usePlayProgress = ({
   const FOCUS_LOOPS = 7;
 
   const BAR_DURATION = (60 / data.song.bpm) * beatsPerBar;
-  const WINDOW_DURATION = BAR_DURATION * ANALYSIS_WINDOW_BARS;
+  // const WINDOW_DURATION = BAR_DURATION * ANALYSIS_WINDOW_BARS;
   const TOTAL_WINDOWS = Math.ceil(TOTAL_BARS / ANALYSIS_WINDOW_BARS);
 
   const TOTAL_DURATION = metadataTotalDuration() || BAR_DURATION * TOTAL_BARS;

@@ -172,7 +172,7 @@ export default function ResultPage() {
                   <div key={row} className="flex items-start gap-2">
                     <LaneGutter staffSpacerClassName="h-16" className="pt-1" />
                     <div className="grid min-w-0 flex-1 grid-cols-6 gap-2">
-                      {bars.slice(row * BARS_PER_ROW, (row + 1) * BARS_PER_ROW).map((bar, i) => {
+                      {bars.slice(row * BARS_PER_ROW, (row + 1) * BARS_PER_ROW).map((_, i) => {
                         const barIndex = row * BARS_PER_ROW + i;
                         return (
                           <button

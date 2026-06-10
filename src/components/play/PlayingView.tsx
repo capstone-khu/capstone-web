@@ -3,15 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { AppHeader } from '@/components/AppHeader';
-import { SONG } from '@/data/song';
+import { type Pitch } from '@/api/songs/song.type';
 import {
-  FEEDBACK_SEQUENCE,
-  currentMarksUpToWindow,
-  previousCautionsForWindow,
-  previousMarksByBar,
-} from '@/data/session';
-import { type PlayMode, prevSessionRecord } from '@/store/usePlaySession';
-import { type Recording } from '@/data/recordings';
+  previousMarksByMeasure,
+  type Feedback,
+  type Mark,
+} from '@/lib/playFeedback';
+import { prevSessionRecord, usePlaySession } from '@/store/usePlaySession';
 import { type usePlayProgress } from '@/hooks/play/usePlayProgress';
 import { CameraStage } from './CameraStage';
 import { PartnerAudioBar } from './PartnerAudioBar';
@@ -21,27 +19,40 @@ import { CurrentFeedback, FeedbackCaption, PreviousCaution } from './FeedbackPan
 export function PlayingView({
   stream,
   progress,
-  mode,
-  recording,
   focusBar,
   focusBars,
   focusIdx,
   onSelectFocusIdx,
   onFinish,
   onExit,
+  songTitle,
+  bars,
+  lyrics,
+  bpm,
+  beatsPerBarCount,
+  duration,
+  latestFeedbacks,
+  liveMarksByBar,
 }: {
   stream: MediaStream | null;
   progress: ReturnType<typeof usePlayProgress>;
-  mode: PlayMode;
-  recording: Recording | null;
   focusBar: number | null;
   focusBars: number[];
   focusIdx: number;
   onSelectFocusIdx: (idx: number) => void;
   onFinish: () => void;
   onExit: () => void;
+  songTitle: string;
+  bars: Pitch[][];
+  lyrics: string[][];
+  bpm: number;
+  beatsPerBarCount: number;
+  duration: string[][];
+  latestFeedbacks: Feedback[];
+  liveMarksByBar: Map<number, Mark[]>;
 }) {
-  const isEnsemble = mode === 'ensemble' && !!recording;
+  const { mode, partner } = usePlaySession();
+  const isEnsemble = mode === 'ensemble' && !!partner;
 
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
@@ -52,7 +63,6 @@ export function PlayingView({
     introDone,
     currentBarIndex,
     progressInBar,
-    currentWindowIndex,
     focusLoopRound,
     TOTAL_BARS,
     FOCUS_LOOPS,
@@ -63,34 +73,22 @@ export function PlayingView({
 
   const isPlaying = introDone && !isFinished && progress.isPlaying;
 
-  const currentMarks = useMemo(
-    () => currentMarksUpToWindow(currentWindowIndex),
-    [currentWindowIndex],
-  );
-
-  const currentFeedbacks = useMemo(
-    () => FEEDBACK_SEQUENCE[currentWindowIndex] ?? [],
-    [currentWindowIndex],
-  );
+  const currentMarks = useMemo(() => new Map(liveMarksByBar), [liveMarksByBar]);
 
   const prev_measures = prevSessionRecord((state) => state.measures);
 
-  const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => (
-    { window: m.measure_index, marks: m.markings.map((mk => ({ area: mk.domain, message: mk.feedback }))) }
-  ));
-
-  const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
+  const previousMarks = useMemo(() => previousMarksByMeasure(prev_measures), [prev_measures]);
   const previousCautions = useMemo(
-    () => previousCautionsForWindow(currentWindowIndex, PREVIOUS_SESSION_MARKS),
-    [currentWindowIndex],
+    () => {
+      const measure = prev_measures.find((m) => m.measure_index === currentBarIndex + 1);
+      return measure?.markings.map((mk) => ({ area: mk.domain, message: mk.feedback })) ?? [];
+    },
+    [prev_measures, currentBarIndex],
   );
 
   const isPostureAlert = useMemo(
-    () =>
-      currentFeedbacks.some(
-        (fb) => fb.tone === 'normal' && fb.area === 'posture',
-      ),
-    [currentFeedbacks],
+    () => latestFeedbacks.some((fb) => fb.tone === 'normal' && fb.area === 'posture'),
+    [latestFeedbacks],
   );
 
   const handleBack = () => {
@@ -116,10 +114,10 @@ export function PlayingView({
             <>마디 {focusBar + 1} 집중 반복</>
           ) : (
             <>
-              {SONG.title}
+              {songTitle}
               {isEnsemble && (
                 <span className="ml-2 rounded-full bg-foreground px-2 py-0.5 text-[11px] text-background">
-                  협주 · {recording.playerName}
+                  협주 · {partner.userName}
                 </span>
               )}
             </>
@@ -174,7 +172,7 @@ export function PlayingView({
 
             {isEnsemble && (
               <PartnerAudioBar
-                name={recording.playerName}
+                name={partner.userName}
                 progress={elapsed / progress.TOTAL_DURATION}
                 playing={progress.isPlaying && introDone && !isFinished}
               />
@@ -191,6 +189,11 @@ export function PlayingView({
               introActive={!introDone}
               onIntroDone={handleIntroDone}
               focusBar={focusBar}
+              bars={bars}
+              lyrics={lyrics}
+              bpm={bpm}
+              beatsPerBarCount={beatsPerBarCount}
+              duration={duration}
             />
           </div>
         </div>
@@ -212,8 +215,8 @@ export function PlayingView({
 
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <CurrentFeedback
-                feedbacks={currentFeedbacks}
-                barIndex={currentWindowIndex}
+                feedbacks={latestFeedbacks}
+                barIndex={currentBarIndex}
               />
               <FeedbackCaption tone="current" />
             </div>

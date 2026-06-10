@@ -6,7 +6,7 @@ import {
   AREA_ICON,
   AREA_BG_LIGHT,
 } from '@/lib/area';
-import { type Caution, type Feedback } from '@/data/session';
+import { type Caution, type Feedback } from '@/lib/playFeedback';
 
 function AreaBadge({ area }: { area: Area }) {
   const Icon = AREA_ICON[area];
