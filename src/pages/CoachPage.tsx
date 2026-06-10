@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AppHeader } from '@/components/AppHeader';
 import { PitchIcon, RhythmIcon, PostureIcon } from '@/components/icons';
-import { type Area, AREA_KO, AREA_TEXT, AREA_PILL, AREAS } from '@/lib/area';
+import { type Area, AREAS, AREA_KO, AREA_TEXT, AREA_PILL } from '@/lib/area';
 import { getAiAnalysis } from '@/api/ai_analysis';
+import { useSessionResult } from '@/hooks/useSessionResult';
 
 type AiLevel = 'weak' | 'ok' | 'good';
 
@@ -36,34 +37,38 @@ function AreaIcon({ area, className }: { area: Area; className?: string }) {
 
 /**
  * AI 상세 분석 — 세션 후 코칭 화면.
- * /result의 'AI 상세 분석' 버튼으로 진입. location.state.recordingId 유무로
- * '과거 기록(마이페이지 → 결과 경유)' / '방금 끝난 연주' 맥락을 구분한다.
- * 진입 시 LLM 분석을 흉내 내는 3-dot 로딩을 잠깐 보여준 뒤 리포트를 노출한다.
+ * /result의 'AI 상세 분석' 버튼으로 진입. 곡 제목은 세션 결과 API에서 가져온다.
  */
 export default function CoachPage() {
   const navigate = useNavigate();
+  const { session_id } = useParams();
+
+  const { sessionResult } = useSessionResult(Number(session_id));
+
   const [ai_report, setAiReport] = useState<AiReport | null>(null);
 
-  // 영역 탭 — 기본은 가장 아쉬운 영역.
+  // 영역 탭 — 기본은 가장 아쉬운 영역(리포트 도착 시 갱신).
   const [tab, setTab] = useState<Area>('pitch');
   const active = ai_report?.domains[tab];
 
-  // LLM 호출을 흉내 내는 로딩 (mock). 실제 연동 시 호출 완료 시점에 해제.
   const [loading, setLoading] = useState(true);
-  const { session_id } = useParams();
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1300);
     const get = async () => {
-      const res = await getAiAnalysis(Number(session_id));
-      if(res.success) {
-        console.log(res.data);
-        setAiReport(res.data);
+      try {
+        const res = await getAiAnalysis(Number(session_id));
+        if (res.success) {
+          setAiReport(res.data);
+          const weakest = AREAS.find(
+            (a) => res.data.domains?.[a]?.level === 'weak'
+          );
+          if (weakest) setTab(weakest);
+        } else alert(res.message);
+      } finally {
+        setLoading(false);
       }
-      else alert(res.message);
-    }
+    };
     get();
-    return () => clearTimeout(t);
-  }, []);
+  }, [session_id]);
 
   const exitLabel = '홈으로';
   const exit = () => navigate('/');
@@ -72,7 +77,7 @@ export default function CoachPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <AppHeader
         onBack={() => navigate(-1)}
-        title={ai_report ? `AI 상세 분석 · #${ai_report.session_id}` : 'AI 상세 분석'}
+        title={sessionResult ? `AI 상세 분석 · ${sessionResult.song_title}` : 'AI 상세 분석'}
         right={
           <Button size="sm" variant="outline" onClick={exit}>
             {exitLabel}

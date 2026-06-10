@@ -852,7 +852,7 @@ function PlayingView({
                   </>
                 ) : (
                   <>
-                    <Button variant="outline" size="lg" onClick={onExit}>
+                    <Button variant="outline" size="lg" onClick={onFinish}>
                       홈으로
                     </Button>
                     <Button size="lg" onClick={onFinish}>
