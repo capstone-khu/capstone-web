@@ -93,7 +93,7 @@ export interface SessionResult {
 }
 
 
-export type Mark = { area: Area; message?: string };
+export type Mark = { area: Area; message?: string; supervisor?: boolean };
 
 
 // 세션 결과 마킹 조회

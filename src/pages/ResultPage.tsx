@@ -85,6 +85,7 @@ export default function ResultPage() {
         measure.current.map((item) => ({
           area: item.domain as Mark['area'],
           message: item.feedback,
+          supervisor: item.action_id.endsWith('-00'),
         }))
       );
     });
@@ -103,6 +104,7 @@ export default function ResultPage() {
         measure.previous.map((item) => ({
           area: item.domain as Mark['area'],
           message: item.feedback,
+          supervisor: item.action_id.endsWith('-00'),
         }))
       );
     });
@@ -202,6 +204,7 @@ export default function ResultPage() {
                                   ? measureDetail.previous_markings.map((m) => ({
                                       area: m.domain as Mark['area'],
                                       message: m.feedback,
+                                      supervisor: m.action_id.endsWith('-00'),
                                     }))
                                   : previousMarks.get(barIndex) ?? []
                               }
@@ -210,6 +213,7 @@ export default function ResultPage() {
                                   ? measureDetail.current_markings.map((m) => ({
                                       area: m.domain as Mark['area'],
                                       message: m.feedback,
+                                      supervisor: m.action_id.endsWith('-00'),
                                     }))
                                   : currentMarks.get(barIndex) ?? []
                               }
