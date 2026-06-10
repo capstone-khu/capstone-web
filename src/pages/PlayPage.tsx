@@ -186,7 +186,12 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
           setLatestFeedbacks(msg.items.map((item) => itemToFeedback(item)));
           if (barIndex >= 0) {
             const newMarks: Mark[] = msg.items
-              .filter((item) => item.domain != null && !item.action?.startsWith('POSITIVE'))
+              .filter(
+                (item) =>
+                  item.domain != null &&
+                  !item.action?.startsWith('POSITIVE') &&
+                  !item.feedback?.includes('분석 실패')
+              )
               .map((item) => ({
                 area: item.domain,
                 supervisor: item.action === 'CALL_SUPERVISOR',
@@ -207,7 +212,7 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
             next[idx] = updated;
             return next;
           });
-          if (barIndex >= 0 && item.domain) {
+          if (barIndex >= 0 && item.domain && !item.feedback?.includes('분석 실패')) {
             setLiveMarksByBar((prev) => {
               const next = new Map(prev);
               const rest = (next.get(barIndex) ?? []).filter((m) => m.area !== item.domain);
