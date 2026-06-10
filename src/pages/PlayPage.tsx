@@ -183,7 +183,13 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
             setLatestFeedbacks([]);
             return;
           }
-          setLatestFeedbacks(msg.items.map((item) => itemToFeedback(item)));
+          // 위임(CALL_SUPERVISOR)이 있으면 카드는 슈퍼바이저 피드백만 노출 — 다른 영역은 마킹으로만 표시
+          const supervisorItem = msg.items.find((item) => item.action === 'CALL_SUPERVISOR');
+          setLatestFeedbacks(
+            supervisorItem
+              ? [itemToFeedback(supervisorItem)]
+              : msg.items.map((item) => itemToFeedback(item))
+          );
           if (barIndex >= 0) {
             const newMarks: Mark[] = msg.items
               .filter(
