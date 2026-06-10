@@ -694,11 +694,20 @@ function PlayingView({
   const previousBarFeedbacks = useMemo<Feedback[]>(() => {
     const measure = prev_measures.find((m) => m.measure_index === currentBarIndex + 1);
     if (!measure || measure.markings.length === 0) return [];
-    return measure.markings.map((mk) => ({
-      tone: 'normal' as const,
-      area: mk.domain,
-      message: mk.feedback,
-    }));
+    return measure.markings.map((mk) =>
+      mk.action_id.endsWith('-00')
+        ? {
+            tone: 'supervisor' as const,
+            action: 'CALL_SUPERVISOR',
+            area: mk.domain,
+            message: mk.feedback,
+          }
+        : {
+            tone: 'normal' as const,
+            area: mk.domain,
+            message: mk.feedback,
+          }
+    );
   }, [prev_measures, currentBarIndex]);
 
   const isPostureAlert = useMemo(
@@ -1303,7 +1312,8 @@ function PreviousFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barI
   }
 
   const issues = feedbacks.filter(
-    (fb): fb is Extract<Feedback, { tone: 'normal' }> => fb.tone === 'normal',
+    (fb): fb is Extract<Feedback, { tone: 'normal' | 'supervisor' }> =>
+      fb.tone === 'normal' || fb.tone === 'supervisor',
   );
   const multi = issues.length > 1;
 
@@ -1316,7 +1326,7 @@ function PreviousFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barI
             i > 0 ? 'w-full border-t border-border/60 pt-3' : ''
           }`}
         >
-          <AreaBadge area={fb.area} />
+          {fb.area && <AreaBadge area={fb.area} rainbow={fb.tone === 'supervisor'} />}
           <p
             className={`font-bold leading-snug tracking-tight text-muted-foreground ${
               multi ? 'text-base' : 'text-xl'
