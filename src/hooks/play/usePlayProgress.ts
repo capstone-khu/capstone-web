@@ -192,6 +192,14 @@ export const usePlayProgress = ({
     setIntroDone(true);
   };
 
+  // 언마운트 시 곡 재생 AudioContext 정리 — 닫지 않으면 페이지를 떠나도 스케줄된 노래가 계속 나옴
+  useEffect(() => {
+    return () => {
+      audioCtxRef.current?.close().catch(() => {});
+      audioCtxRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     if (!introDone) return;
 
