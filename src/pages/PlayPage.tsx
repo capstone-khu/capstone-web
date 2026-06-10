@@ -188,12 +188,14 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
             setLatestFeedbacks([]);
             return;
           }
+          // 분석 실패 항목은 카드·마킹 모두 제외 — 전부 실패면 placeholder("분석 중")로
+          const visibleItems = msg.items.filter((item) => !isAnalysisFailure(item));
           // 위임(CALL_SUPERVISOR)이 있으면 카드는 슈퍼바이저 피드백만 노출 — 다른 영역은 마킹으로만 표시
-          const supervisorItem = msg.items.find((item) => item.action === 'CALL_SUPERVISOR');
+          const supervisorItem = visibleItems.find((item) => item.action === 'CALL_SUPERVISOR');
           setLatestFeedbacks(
             supervisorItem
               ? [itemToFeedback(supervisorItem)]
-              : msg.items.map((item) => itemToFeedback(item))
+              : visibleItems.map((item) => itemToFeedback(item))
           );
           if (barIndex >= 0) {
             const newMarks: Mark[] = msg.items
@@ -214,6 +216,7 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
           }
         } else if (msg.type === 'feedback_update') {
           const { item } = msg;
+          if (isAnalysisFailure(item)) return; // 분석 실패 결과는 카드·마킹 갱신 안 함
           const updated = itemToFeedback(item, true);
           // 같은 도메인 항목만 교체하고 나머지 도메인 피드백은 유지
           setLatestFeedbacks((prev) => {
