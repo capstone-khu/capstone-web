@@ -178,7 +178,12 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
         const barIndex = msg.measure_index - 1;
 
         if (msg.type === 'feedback') {
-          if (!Array.isArray(msg.items) || msg.items.length === 0) return;
+          if (!Array.isArray(msg.items)) return;
+          // 빈 items = 분석 데이터가 없던 마디 — 이전 마디 피드백 잔상을 지운다
+          if (msg.items.length === 0) {
+            setLatestFeedbacks([]);
+            return;
+          }
           setLatestFeedbacks(msg.items.map((item) => itemToFeedback(item)));
           if (barIndex >= 0) {
             const newMarks: Mark[] = msg.items
