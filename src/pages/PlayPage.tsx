@@ -34,6 +34,11 @@ type WsFeedbackMessage =
   | { type: 'feedback'; measure_index: number; items: WsFeedbackItem[] }
   | { type: 'feedback_update'; measure_index: number; item: WsFeedbackItem };
 
+/** "분석(에) 실패했어요" 류 피드백 — 모든 도메인에서 악보 마킹 제외 */
+function isAnalysisFailure(item: WsFeedbackItem): boolean {
+  return /분석.*실패/.test(item.feedback ?? '');
+}
+
 function itemToFeedback(item: WsFeedbackItem, isUpdate = false): Feedback {
   if (item.action === 'CALL_SUPERVISOR') {
     return {
@@ -196,7 +201,7 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
                 (item) =>
                   item.domain != null &&
                   !item.action?.startsWith('POSITIVE') &&
-                  !item.feedback?.includes('분석 실패')
+                  !isAnalysisFailure(item)
               )
               .map((item) => ({
                 area: item.domain,
@@ -218,7 +223,7 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
             next[idx] = updated;
             return next;
           });
-          if (barIndex >= 0 && item.domain && !item.feedback?.includes('분석 실패')) {
+          if (barIndex >= 0 && item.domain && !isAnalysisFailure(item)) {
             setLiveMarksByBar((prev) => {
               const next = new Map(prev);
               const rest = (next.get(barIndex) ?? []).filter((m) => m.area !== item.domain);
