@@ -199,15 +199,26 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
           }
         } else if (msg.type === 'feedback_update') {
           const { item } = msg;
-          setLatestFeedbacks([itemToFeedback(item, true)]);
+          const updated = itemToFeedback(item, true);
+          // 같은 도메인 항목만 교체하고 나머지 도메인 피드백은 유지
+          setLatestFeedbacks((prev) => {
+            const idx = prev.findIndex((fb) => 'area' in fb && fb.area === item.domain);
+            if (idx === -1) return [updated];
+            const next = [...prev];
+            next[idx] = updated;
+            return next;
+          });
           if (barIndex >= 0 && item.domain) {
-            setLiveMarksByBar((prev) =>
-              new Map(prev).set(barIndex, [{
+            setLiveMarksByBar((prev) => {
+              const next = new Map(prev);
+              const rest = (next.get(barIndex) ?? []).filter((m) => m.area !== item.domain);
+              next.set(barIndex, [...rest, {
                 area: item.domain,
                 supervisor: item.action === 'CALL_SUPERVISOR',
                 message: item.feedback,
-              }])
-            );
+              }]);
+              return next;
+            });
           }
         }
       } catch { /* not JSON */ }
