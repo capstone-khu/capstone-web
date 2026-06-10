@@ -127,9 +127,10 @@ export default function MyPage() {
 
                       <AreaStatGrid summary={item.stats} />
 
+                      {/* API focus_measures는 1-based measure_index — 프론트 focusBars는 0-based */}
                       {item.focus_measures?.length > 0 && (
                         <RepeatBarCoach
-                          focusMeasures={item.focus_measures}
+                          focusMeasures={item.focus_measures.map((m) => m - 1)}
                           onStart={async () => {
                             // 집중 반복 레슨은 항상 솔로 세션으로 생성 —
                             // 이력 응답에는 duet 세션 생성에 필요한 partner_recording_id가 없음
@@ -139,7 +140,7 @@ export default function MyPage() {
                               return;
                             }
                             startSolo(res.data.session_id);
-                            startFocus(item.focus_measures);
+                            startFocus(item.focus_measures.map((m) => m - 1));
                             navigate(`/play/${item.song_id}`);
                           }}
                         />
