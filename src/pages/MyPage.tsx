@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
@@ -44,6 +45,9 @@ export default function MyPage() {
 
   if (!items || recordLoading) return <Loading />;
 
+  const videoUrl = duetVideo
+    ? `${import.meta.env.VITE_API_URL}${duetVideo.composite_video_url}`
+    : ""; 
   
   // pagination 연산 
   const pageCount = Math.ceil(total / size);
@@ -220,7 +224,7 @@ export default function MyPage() {
             <video
               controls
               className="w-full rounded-lg"
-              src={duetVideo.composite_video_url}
+              src={videoUrl}
             />
 
             
