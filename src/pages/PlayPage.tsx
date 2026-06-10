@@ -182,7 +182,7 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
           setLatestFeedbacks(msg.items.map((item) => itemToFeedback(item)));
           if (barIndex >= 0) {
             const newMarks: Mark[] = msg.items
-              .filter((item) => item.domain != null)
+              .filter((item) => item.domain != null && !item.action?.startsWith('POSITIVE'))
               .map((item) => ({
                 area: item.domain,
                 supervisor: item.action === 'CALL_SUPERVISOR',
