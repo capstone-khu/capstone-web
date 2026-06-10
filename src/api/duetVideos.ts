@@ -4,7 +4,7 @@ export interface DuetVideo {
   duet_composite_id: number;
   song_title: string;
   partner_name: string;
-  status: 'ready' | 'processing' | 'failed';
+  status: 'pending' | 'processing' | 'ready' | 'failed';
   composite_video_url: string;
   created_at: string;
 }

@@ -45,9 +45,12 @@ export default function MyPage() {
 
   if (!items || recordLoading) return <Loading />;
 
-  const videoUrl = duetVideo
-    ? `${import.meta.env.VITE_API_URL}${duetVideo.composite_video_url}`
-    : ""; 
+  // 서버가 절대 URL(MEDIA_BASE_URL)로 줄 수도 있으니 상대 경로일 때만 API 오리진을 붙인다
+  const videoUrl = duetVideo?.composite_video_url
+    ? duetVideo.composite_video_url.startsWith('http')
+      ? duetVideo.composite_video_url
+      : `${import.meta.env.VITE_API_URL}${duetVideo.composite_video_url}`
+    : '';
   
   // pagination 연산 
   const pageCount = Math.ceil(total / size);
@@ -216,20 +219,36 @@ export default function MyPage() {
           )}
 
           {duetVideo && (
-          <div className="space-y-3 p-4">
+            <div className="space-y-3 p-4">
+              <div className="text-sm text-muted-foreground">
+                {duetVideo.partner_name}님과  「 {duetVideo.song_title} 」을 협주한 영상입니다.
+              </div>
 
-          <div className="text-sm text-muted-foreground">
-              {duetVideo.partner_name}님과  「 {duetVideo.song_title} 」을 협주한 영상입니다.
+              {duetVideo.status === 'ready' ? (
+                <video controls className="w-full rounded-lg" src={videoUrl} />
+              ) : duetVideo.status === 'failed' ? (
+                <p className="py-8 text-center text-sm font-semibold text-muted-foreground">
+                  영상 합성에 실패했어요. 잠시 후 다시 시도해주세요.
+                </p>
+              ) : (
+                // pending · processing — ready가 되면 자동 전환(폴링)
+                <div className="flex flex-col items-center gap-3 py-10">
+                  <div className="flex gap-1.5">
+                    {[0, 150, 300].map((d) => (
+                      <span
+                        key={d}
+                        className="h-2.5 w-2.5 animate-bounce rounded-full bg-muted-foreground"
+                        style={{ animationDelay: `${d}ms` }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    협주 영상을 만들고 있어요
+                  </p>
+                </div>
+              )}
             </div>
-            <video
-              controls
-              className="w-full rounded-lg"
-              src={videoUrl}
-            />
-
-            
-          </div>
-        )}      
+          )}
       </Modal>
     </div>
   );
