@@ -186,13 +186,30 @@ function MarkRow({
   const curr = current.find((m) => m.area === area);
   const prev = previous.find((m) => m.area === area);
 
-  const isRainbow = curr?.supervisor === true;
+  const RAINBOW = 'linear-gradient(90deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #a78bfa)';
+  const AREA_FILL: Record<Area, string> = {
+    pitch: 'hsl(var(--pitch) / 0.6)',
+    rhythm: 'hsl(var(--rhythm) / 0.6)',
+    posture: 'hsl(var(--posture) / 0.6)',
+  };
+
+  const currRainbow = curr?.supervisor === true;
+  const prevRainbow = prev?.supervisor === true;
 
   let barClass: string;
   let style: CSSProperties | undefined;
-  if (isRainbow) {
-    barClass = prev ? markBorderClass(area) : '';
-    style = { background: 'linear-gradient(90deg, #f87171, #fb923c, #facc15, #4ade80, #60a5fa, #a78bfa)' };
+  if (currRainbow) {
+    // 현재 위임 — 무지개 채움 (+ 이전 마크는 영역색 테두리)
+    barClass = prev && !prevRainbow ? markBorderClass(area) : '';
+    style = { background: RAINBOW };
+  } else if (prevRainbow) {
+    // 이전 위임 — 무지개 테두리, 채움은 현재 마크 영역색(없으면 빈 배경)
+    const fill = curr ? AREA_FILL[area] : 'hsl(var(--background))';
+    barClass = '';
+    style = {
+      border: '2px solid transparent',
+      background: `linear-gradient(${fill}, ${fill}) padding-box, ${RAINBOW} border-box`,
+    };
   } else if (curr && prev) {
     barClass = `${markClass(area, 'current')} ${markBorderClass(area)}`;
   } else if (curr) {

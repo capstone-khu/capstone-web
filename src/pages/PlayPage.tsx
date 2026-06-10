@@ -678,7 +678,7 @@ function PlayingView({
   const prev_measures = prevSessionRecord((state) => state.measures);
 
   const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => (
-    {window: m.measure_index, marks: m.markings.map((mk => ({area: mk.domain, message: mk.feedback})))}
+    {window: m.measure_index, marks: m.markings.map((mk => ({area: mk.domain, message: mk.feedback, supervisor: mk.action_id.endsWith('-00')})))}
   ))
 
   const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
