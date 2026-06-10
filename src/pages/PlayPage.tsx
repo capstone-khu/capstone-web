@@ -7,7 +7,6 @@ import { BarView, LaneGutter } from '@/components/sheet/BarView';
 import { CheckIcon, HistoryIcon } from '@/components/icons';
 import { AppHeader } from '@/components/AppHeader';
 import {
-  previousMarksByBar,
   type Feedback,
   type Mark,
 } from '@/data/session';
@@ -677,11 +676,21 @@ function PlayingView({
 
   const prev_measures = prevSessionRecord((state) => state.measures);
 
-  const PREVIOUS_SESSION_MARKS = prev_measures.map((m) => (
-    {window: m.measure_index, marks: m.markings.map((mk => ({area: mk.domain, message: mk.feedback, supervisor: mk.action_id.endsWith('-00')})))}
-  ))
-
-  const previousMarks = useMemo(() => previousMarksByBar(PREVIOUS_SESSION_MARKS), []);
+  // 직전 세션 마킹은 마디(measure_index, 1-based) 단위 — bar 인덱스(0-based)로 그대로 매핑
+  const previousMarks = useMemo(() => {
+    const map = new Map<number, Mark[]>();
+    prev_measures.forEach((m) => {
+      map.set(
+        m.measure_index - 1,
+        m.markings.map((mk) => ({
+          area: mk.domain,
+          message: mk.feedback,
+          supervisor: mk.action_id.endsWith('-00'),
+        }))
+      );
+    });
+    return map;
+  }, [prev_measures]);
   const previousBarFeedbacks = useMemo<Feedback[]>(() => {
     const measure = prev_measures.find((m) => m.measure_index === currentBarIndex + 1);
     if (!measure || measure.markings.length === 0) return [];
