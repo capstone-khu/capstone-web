@@ -83,7 +83,7 @@ export default function ResultPage() {
       map.set(
         measure.measure_index - 1,
         measure.current.map((item) => ({
-          area: item.domain as Mark['area'],
+          area: item.domain.toLowerCase() as Mark['area'],
           message: item.feedback,
         }))
       );
@@ -91,7 +91,7 @@ export default function ResultPage() {
 
     return map;
   }, [sessionResult]);
-  
+
 
   const previousMarks = useMemo(() => {
     if (!sessionResult) return new Map();
@@ -101,7 +101,7 @@ export default function ResultPage() {
       map.set(
         measure.measure_index - 1,
         measure.previous.map((item) => ({
-          area: item.domain as Mark['area'],
+          area: item.domain.toLowerCase() as Mark['area'],
           message: item.feedback,
         }))
       );
@@ -200,7 +200,7 @@ export default function ResultPage() {
                               previousMarks={
                                 barIndex === selectedBar && measureDetail
                                   ? measureDetail.previous_markings.map((m) => ({
-                                      area: m.domain as Mark['area'],
+                                      area: m.domain.toLowerCase() as Mark['area'],
                                       message: m.feedback,
                                     }))
                                   : previousMarks.get(barIndex) ?? []
@@ -208,7 +208,7 @@ export default function ResultPage() {
                               currentMarks={
                                 barIndex === selectedBar && measureDetail
                                   ? measureDetail.current_markings.map((m) => ({
-                                      area: m.domain as Mark['area'],
+                                      area: m.domain.toLowerCase() as Mark['area'],
                                       message: m.feedback,
                                     }))
                                   : currentMarks.get(barIndex) ?? []

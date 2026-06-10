@@ -2,7 +2,6 @@
  * MVP 세션 더미 데이터 — 분석 윈도우(3마디) 단위 피드백.
  * 화면 기획용. 실제 분석 결과 대신 시나리오 기반 시드.
  */
-import { SONG } from '@/data/song';
 import type { Area } from '@/lib/area';
 
 export type Severity = 'mild' | 'major';
@@ -200,9 +199,9 @@ export function previousMarksByBar(PREVIOUS_SESSION_MARKS:any): Map<number, Mark
  * 라이브 세션은 FEEDBACK_SEQUENCE를 쓰지만, 과거 기록(마이페이지)은 영역별 개수만 갖고 있어
  * 기록마다 다른 마킹 분포를 보이도록 결정적으로 펼친다. (첫 개는 살짝, 이후는 심각)
  */
-export function marksFromSummary(summary: Record<Area, number>): Map<number, Mark[]> {
+export function marksFromSummary(summary: Record<Area, number>, totalBars: number): Map<number, Mark[]> {
   const map = new Map<number, Mark[]>();
-  const totalWindows = Math.ceil(SONG.bars.length / ANALYSIS_WINDOW_BARS);
+  const totalWindows = Math.ceil(totalBars / ANALYSIS_WINDOW_BARS);
   // 영역마다 시작 윈도우를 달리해 분포가 겹쳐도 한 마디 최대 3줄(영역별 1줄)을 넘지 않게 한다.
   const startWindow: Record<Area, number> = { pitch: 1, rhythm: 3, posture: 5 };
   (['pitch', 'rhythm', 'posture'] as Area[]).forEach((area) => {
@@ -211,7 +210,7 @@ export function marksFromSummary(summary: Record<Area, number>): Map<number, Mar
       if (window >= totalWindows) break;
       const severity: Severity = n === 0 ? 'mild' : 'major';
       const startBar = window * ANALYSIS_WINDOW_BARS;
-      for (let b = startBar; b < startBar + ANALYSIS_WINDOW_BARS && b < SONG.bars.length; b++) {
+      for (let b = startBar; b < startBar + ANALYSIS_WINDOW_BARS && b < totalBars; b++) {
         const arr = map.get(b) ?? [];
         arr.push({ area, severity, message: SAMPLE_MESSAGE[area][severity] });
         map.set(b, arr);

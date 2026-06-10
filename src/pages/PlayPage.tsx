@@ -36,19 +36,20 @@ type WsFeedbackMessage =
   | { type: 'feedback_update'; measure_index: number; item: WsFeedbackItem };
 
 function itemToFeedback(item: WsFeedbackItem, isUpdate = false): Feedback {
+  const domain = item.domain?.toLowerCase() as Area;
   if (item.action === 'CALL_SUPERVISOR') {
     return {
       tone: 'supervisor',
       message: item.feedback,
       action: 'CALL_SUPERVISOR',
       isUpdated: isUpdate,
-      ...(item.domain ? { area: item.domain } : {}),
+      ...(domain ? { area: domain } : {}),
     };
   }
-  if (item.action?.startsWith('POSITIVE')) {
+  if (item.action?.startsWith('POSITIVE') || !domain) {
     return { tone: 'positive', message: item.feedback };
   }
-  return { tone: 'normal', area: item.domain, message: item.feedback };
+  return { tone: 'normal', area: domain, message: item.feedback };
 }
 
 export default function PlayPage() {
@@ -88,10 +89,14 @@ export default function PlayPage() {
   return <PlayPageInner song={song} ws={socket}/>;
 }
 
+// 피드백이 도착했을 때 해당 바가 현재 페이지에 있는지 확인하는 상수 (SheetStage와 동기화)
+const BARS_PER_PAGE = 4;
+
 function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) {
   const [focusIdx, setFocusIdx] = useState(0);
   const [latestFeedbacks, setLatestFeedbacks] = useState<Feedback[]>([]);
   const [liveMarksByBar, setLiveMarksByBar] = useState<Map<number, Mark[]>>(new Map());
+  const currentBarIndexRef = useRef<number>(0);
   const audioRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -111,15 +116,17 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
     data: song,
     focusBar: activeFocusBar,
     onStartRecording: () => {
-      if (!stream || !ws || !videoRef.current) return;
+      if (!stream || !videoRef.current) return;
       startRecording(stream);
       t0Ref.current = Date.now();
-      sendAudioFrame(stream, ws, t0Ref.current).then(sender => {
-        audioSenderRef.current = sender;
-      });
+      if (ws) {
+        sendAudioFrame(stream, ws, t0Ref.current).then(sender => {
+          audioSenderRef.current = sender;
+        });
+      }
       videoIntervalRef.current = window.setInterval(() => {
-        if (videoRef.current && ws.readyState === WebSocket.OPEN) {
-          sendVideoFrame(videoRef.current, ws, t0Ref.current);
+        if (videoRef.current && ws?.readyState === WebSocket.OPEN) {
+          sendVideoFrame(videoRef.current, ws!, t0Ref.current);
         }
       }, 100);
     },
@@ -130,7 +137,9 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
   const setCurrentMeasureIndex = usePlaySession((s) => s.setCurrentMeasureIndex);
 
   useEffect(() => {
+    currentBarIndexRef.current = progress.currentBarIndex;
     setCurrentMeasureIndex(progress.currentBarIndex + 1);
+    setLatestFeedbacks([]);
 
     // currentBarIndex === 0은 연주 시작 시점 — 첫 번째 마디가 끝나기 전이므로 전송 안 함
     if (!ws || progress.currentBarIndex === 0) return;
@@ -175,30 +184,40 @@ function PlayPageInner({ song, ws }: { song: ScoreData, ws: WebSocket | null }) 
       console.log('ws message:', e.data);
       try {
         const msg = JSON.parse(e.data) as WsFeedbackMessage;
-        const barIndex = msg.measure_index - 1;
+        const rawBarIndex = msg.measure_index - 1;
+
+        // 피드백이 도착했을 때 해당 바가 현재 페이지(4마디 단위)에 없으면
+        // 현재 재생 중인 바에 마킹해 색상이 항상 화면에 보이도록 함
+        const getVisibleBarIndex = (idx: number) => {
+          const currentPage = Math.floor(currentBarIndexRef.current / BARS_PER_PAGE);
+          const targetPage = Math.floor(idx / BARS_PER_PAGE);
+          return targetPage < currentPage ? currentBarIndexRef.current : idx;
+        };
 
         if (msg.type === 'feedback') {
           if (!Array.isArray(msg.items) || msg.items.length === 0) return;
           setLatestFeedbacks(msg.items.map((item) => itemToFeedback(item)));
-          if (barIndex >= 0) {
+          if (rawBarIndex >= 0) {
             const newMarks: Mark[] = msg.items
               .filter((item) => item.domain != null)
               .map((item) => ({
-                area: item.domain,
+                area: item.domain?.toLowerCase() as Area,
                 supervisor: item.action === 'CALL_SUPERVISOR',
                 message: item.feedback,
               }));
             if (newMarks.length > 0) {
+              const barIndex = getVisibleBarIndex(rawBarIndex);
               setLiveMarksByBar((prev) => new Map(prev).set(barIndex, newMarks));
             }
           }
         } else if (msg.type === 'feedback_update') {
           const { item } = msg;
           setLatestFeedbacks([itemToFeedback(item, true)]);
-          if (barIndex >= 0 && item.domain) {
+          if (rawBarIndex >= 0 && item.domain) {
+            const barIndex = getVisibleBarIndex(rawBarIndex);
             setLiveMarksByBar((prev) =>
               new Map(prev).set(barIndex, [{
-                area: item.domain,
+                area: item.domain?.toLowerCase() as Area,
                 supervisor: item.action === 'CALL_SUPERVISOR',
                 message: item.feedback,
               }])
@@ -1155,7 +1174,7 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
         key={`empty-${barIndex}`}
         className="animate-feedback-in flex min-h-[110px] min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background px-5 text-sm text-muted-foreground"
       >
-        <p>다음 마디의 피드백을 분석 중</p>
+        <p>분석 중</p>
         <div className="flex gap-1.5">
           {[0, 150, 300].map((d) => (
             <span
@@ -1226,7 +1245,25 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
   const issues = feedbacks
     .filter((fb): fb is Extract<Feedback, { tone: 'normal' }> => fb.tone === 'normal')
     .sort((a, b) => (a.reward ?? 0) - (b.reward ?? 0));
-  if (issues.length === 0) return null;
+  if (issues.length === 0) {
+    return (
+      <div
+        key={`empty-${barIndex}`}
+        className="animate-feedback-in flex min-h-[110px] min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background px-5 text-sm text-muted-foreground"
+      >
+        <p>분석 중</p>
+        <div className="flex gap-1.5">
+          {[0, 150, 300].map((d) => (
+            <span
+              key={d}
+              className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground"
+              style={{ animationDelay: `${d}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
   const multi = issues.length > 1;
   // 다중이면 한 영역색으로 칠할 수 없으니 중립 카드, 단일이면 영역 틴트.
   const bg = multi ? 'border border-border bg-card shadow-soft' : AREA_BG_LIGHT[issues[0].area];
