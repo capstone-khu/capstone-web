@@ -1,15 +1,14 @@
 // 전체 연주 엔진
 // 연주 진행 상태 관리 (진행 시간, 현재 마디/박자, 일시정지/재개 등)
 
-import { scheduleBarsLoop, scheduleSong } from "@/lib/audio";
+import { scheduleBarsLoop, scheduleMetadataSong, scheduleSong } from "@/lib/audio";
 import { useRef, useState, useEffect } from "react";
 import { type ScoreData } from "@/api/songs/song.type";
+import { scoreMetadata } from "@/lib/score_metadata";
 
 interface PlayProgressInput {
   data: ScoreData;
   focusBar?: number | null;
-
-  // 🎯 추가: 녹화 시작 트리거
   onStartRecording?: () => void;
 }
 
@@ -40,6 +39,70 @@ interface PlayProgressReturn {
 /** 분석 단위: 3마디 = 한 윈도우 */
 export const ANALYSIS_WINDOW_BARS = 3;
 
+const METADATA_OFFSET = scoreMetadata.notes.length > 0
+  ? Math.min(...scoreMetadata.notes.map((n) => n.start))
+  : 0;
+
+function calcBarFromMetadata(elapsed: number): {
+  barIndex: number;
+  progressInBar: number;
+} {
+  const notes = scoreMetadata.notes;
+  if (notes.length === 0) return { barIndex: 0, progressInBar: 0 };
+
+  const measureMap = new Map<number, { firstStart: number; lastEnd: number }>();
+  for (const n of notes) {
+    const m = n.measure;
+    const start = n.start - METADATA_OFFSET;
+    const end = n.end - METADATA_OFFSET;
+    const existing = measureMap.get(m);
+    if (!existing) {
+      measureMap.set(m, { firstStart: start, lastEnd: end });
+    } else {
+      measureMap.set(m, {
+        firstStart: Math.min(existing.firstStart, start),
+        lastEnd: Math.max(existing.lastEnd, end),
+      });
+    }
+  }
+
+  const measures = Array.from(measureMap.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([measure, { firstStart, lastEnd }]) => ({ measure, firstStart, lastEnd }));
+
+  const totalEnd = measures[measures.length - 1].lastEnd;
+
+  if (elapsed >= totalEnd) {
+    return {
+      barIndex: measures[measures.length - 1].measure - 1,
+      progressInBar: 1,
+    };
+  }
+
+  for (let i = 0; i < measures.length; i++) {
+    const cur = measures[i];
+    const nextStart =
+      i + 1 < measures.length ? measures[i + 1].firstStart : cur.lastEnd;
+
+    if (elapsed >= cur.firstStart && elapsed < nextStart) {
+      const barDuration = nextStart - cur.firstStart;
+      const progressInBar =
+        barDuration > 0 ? (elapsed - cur.firstStart) / barDuration : 0;
+      return {
+        barIndex: cur.measure - 1,
+        progressInBar: Math.min(progressInBar, 1),
+      };
+    }
+  }
+
+  return { barIndex: 0, progressInBar: 0 };
+}
+
+function metadataTotalDuration(): number {
+  if (scoreMetadata.notes.length === 0) return 0;
+  return Math.max(...scoreMetadata.notes.map((n) => n.end)) - METADATA_OFFSET;
+}
+
 export const usePlayProgress = ({
   data,
   focusBar,
@@ -54,7 +117,15 @@ export const usePlayProgress = ({
   const BAR_DURATION = (60 / data.song.bpm) * beatsPerBar;
   const WINDOW_DURATION = BAR_DURATION * ANALYSIS_WINDOW_BARS;
   const TOTAL_WINDOWS = Math.ceil(TOTAL_BARS / ANALYSIS_WINDOW_BARS);
-  const TOTAL_DURATION = BAR_DURATION * TOTAL_BARS;
+
+  const TOTAL_DURATION = metadataTotalDuration() || BAR_DURATION * TOTAL_BARS;
+
+  const focused = focusBar != null;
+  const phraseStart = focused ? focusBar : 0;
+  const phraseEnd = focused ? focusBar : TOTAL_BARS - 1;
+  const phraseBars = phraseEnd - phraseStart + 1;
+  const PHRASE_DURATION = phraseBars * BAR_DURATION;
+  const focusDuration = PHRASE_DURATION * FOCUS_LOOPS;
 
   const [elapsed, setElapsed] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -65,59 +136,41 @@ export const usePlayProgress = ({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const songStartTimeRef = useRef<number>(0);
 
-  const focused = focusBar != null;
+  let currentBarIndex: number;
+  let progressInBar: number;
 
-  const phraseStart = focused ? focusBar : 0;
-  const phraseEnd = focused ? focusBar : TOTAL_BARS - 1;
+  if (focused) {
+    const playClock = elapsed % PHRASE_DURATION;
+    currentBarIndex =
+      phraseStart + Math.min(Math.floor(playClock / BAR_DURATION), phraseBars - 1);
+    progressInBar = (playClock % BAR_DURATION) / BAR_DURATION;
+  } else {
+    const result = calcBarFromMetadata(elapsed);
+    currentBarIndex = Math.min(result.barIndex, TOTAL_BARS - 1);
+    progressInBar = result.progressInBar;
+  }
 
-  const phraseBars = phraseEnd - phraseStart + 1;
-  const PHRASE_DURATION = phraseBars * BAR_DURATION;
-  const focusDuration = PHRASE_DURATION * FOCUS_LOOPS;
+  const focusLoopRound = focused ? Math.floor(elapsed / PHRASE_DURATION) + 1 : 0;
 
-  const focusLoopRound = focused
-    ? Math.floor(elapsed / PHRASE_DURATION) + 1
-    : 0;
+  const currentWindowIndex = Math.min(
+    Math.floor(currentBarIndex / ANALYSIS_WINDOW_BARS),
+    TOTAL_WINDOWS - 1
+  );
 
-  const playClock = focused ? elapsed % PHRASE_DURATION : elapsed;
+  const pause = () => setIsPlaying(false);
+  const resume = () => setIsPlaying(true);
 
-  const currentBarIndex = focused
-    ? phraseStart +
-      Math.min(Math.floor(playClock / BAR_DURATION), phraseBars - 1)
-    : Math.min(Math.floor(elapsed / BAR_DURATION), TOTAL_BARS - 1);
-
-  const progressInBar = (playClock % BAR_DURATION) / BAR_DURATION;
-
-  const currentWindowIndex = focused
-    ? Math.min(
-        Math.floor(currentBarIndex / ANALYSIS_WINDOW_BARS),
-        TOTAL_WINDOWS - 1
-      )
-    : Math.min(Math.floor(elapsed / WINDOW_DURATION), TOTAL_WINDOWS - 1);
-
-
-  const pause = () => {
-    setIsPlaying(false);
-  };
-
-  const resume = () => {
-    setIsPlaying(true);
-  };
-
-  // restart (집중모드 재시작)
   const restart = () => {
     audioCtxRef.current?.close();
     audioCtxRef.current = null;
-
     setElapsed(0);
     setIsFinished(false);
     setIsPlaying(true);
     setIntroDone(false);
   };
 
-  // 카운트인 종료 → 연주 시작
   const handleIntroDone = () => {
     const Ctx = window.AudioContext;
-
     if (!Ctx) return;
 
     const ctx = new Ctx();
@@ -126,29 +179,19 @@ export const usePlayProgress = ({
     ctx.resume().then(() => {
       songStartTimeRef.current = ctx.currentTime;
 
-      // 녹화 시작 트리거
       onStartRecording?.();
       console.log("녹화 시작!");
 
-      // 음악 스케줄 시작
       if (focused) {
-        scheduleBarsLoop(
-          ctx,
-          songStartTimeRef.current,
-          phraseStart,
-          phraseEnd,
-          FOCUS_LOOPS,
-          data
-        );
+        scheduleBarsLoop(ctx, songStartTimeRef.current, phraseStart, phraseEnd, FOCUS_LOOPS, data);
       } else {
-        scheduleSong(ctx, songStartTimeRef.current, data);
+        scheduleMetadataSong(ctx, songStartTimeRef.current, scoreMetadata);
       }
     });
 
     setIntroDone(true);
   };
 
-  // progress loop
   useEffect(() => {
     if (!introDone) return;
 
@@ -161,11 +204,13 @@ export const usePlayProgress = ({
 
     ctx?.resume();
 
+    const endAt = focused ? focusDuration : TOTAL_DURATION;
+
     const tick = () => {
       const ac = audioCtxRef.current;
-      const now = ac ? ac.currentTime - songStartTimeRef.current : 0;
+      if (!ac) return;
 
-      const endAt = focused ? focusDuration : TOTAL_DURATION;
+      const now = ac.currentTime - songStartTimeRef.current;
 
       if (now >= endAt) {
         setElapsed(endAt);
@@ -187,24 +232,19 @@ export const usePlayProgress = ({
   return {
     elapsed,
     focused,
-
     isPlaying,
     isFinished,
     introDone,
-
     currentBarIndex,
     progressInBar,
     currentWindowIndex,
-
     focusLoopRound,
     TOTAL_DURATION,
     TOTAL_BARS,
     FOCUS_LOOPS,
-
     pause,
     resume,
     restart,
-
     handleIntroDone,
   };
 };

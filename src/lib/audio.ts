@@ -1,5 +1,21 @@
 import { PITCH_FREQ, type Pitch } from '@/api/songs/song.type';
 import { type ScoreData } from '@/api/songs/song.type';
+import { scoreMetadata } from './score_metadata'; 
+
+export interface MetadataNote {
+  note: string;
+  start: number;
+  end: number;
+  duration: number;
+  measure: number;
+}
+
+export interface ScoreMetadata {
+  source: string;
+  key: string;
+  total_notes: number;
+  notes: MetadataNote[];
+} 
 
 /**
  * 단일 음표 스케줄. triangle wave + 짧은 attack/release envelope (바이올린 흉내는 아니지만
@@ -42,6 +58,28 @@ export function scheduleSong(ctx: AudioContext, startTime: number, song: ScoreDa
       const duration = noteDurationSec(note.duration, beatSec);
       scheduleNote(ctx, freq, when, duration * 0.9);
     });
+  });
+}
+
+export function scheduleMetadataSong(
+  ctx: AudioContext,
+  startTime: number,
+  metadata: ScoreMetadata,
+) {
+  const offset = metadata.notes.length > 0
+    ? Math.min(...metadata.notes.map((n) => n.start))
+    : 0;
+
+  metadata.notes.forEach((note) => {
+    const freq = PITCH_FREQ[note.note as Pitch];
+    if (!freq) return;
+
+    scheduleNote(
+      ctx,
+      freq,
+      startTime + (note.start - offset),
+      note.duration,
+    );
   });
 }
 
