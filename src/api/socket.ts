@@ -1,29 +1,61 @@
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
 
-function frame(type: number, tsMs: number, jpegBytes: Uint8Array) {
-    const headerSize = 1 + 8;
+// function frame(type: number, tsMs: number, jpegBytes: Uint8Array) {
+//     const headerSize = 1 + 4;
 
-    const buffer = new ArrayBuffer(
-        headerSize + jpegBytes.length
-    );
+//     const buffer = new ArrayBuffer(
+//         headerSize + jpegBytes.length
+//     );
 
-    const view = new DataView(buffer);
+//     const view = new DataView(buffer);
 
-    view.setUint8(0, type);
+//     view.setUint8(0, type);
 
-    view.setBigUint64(
-        1,
-        BigInt(tsMs),
-        false
-    );
+//     view.setBigUint64(
+//         1,
+//         BigInt(tsMs),
+//         false
+//     );
 
-    new Uint8Array(
-        buffer,
-        headerSize
-    ).set(jpegBytes);
+//     new Uint8Array(
+//         buffer,
+//         headerSize
+//     ).set(jpegBytes);
 
-    return buffer;
+//     return buffer;
+// }
+
+function frame(
+  type: number,
+  tsMs: number,
+  payload: Uint8Array
+): ArrayBuffer {
+  const headerSize = 1 + 4;
+
+  const buffer = new ArrayBuffer(
+    headerSize + payload.length
+  );
+
+  const view = new DataView(buffer);
+
+  // 1 byte: type
+  view.setUint8(0, type);
+
+  // 4 bytes: timestamp (Uint32, Big Endian)
+  view.setUint32(
+    1,
+    tsMs,
+    false
+  );
+
+  // payload
+  new Uint8Array(
+    buffer,
+    headerSize
+  ).set(payload);
+
+  return buffer;
 }
 
 export function sendVideoFrame(video: HTMLVideoElement, ws: WebSocket, t0:number) {

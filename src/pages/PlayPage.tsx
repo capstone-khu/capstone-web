@@ -1226,6 +1226,7 @@ function CurrentFeedback({ feedbacks, barIndex }: { feedbacks: Feedback[]; barIn
   const issues = feedbacks
     .filter((fb): fb is Extract<Feedback, { tone: 'normal' }> => fb.tone === 'normal')
     .sort((a, b) => (a.reward ?? 0) - (b.reward ?? 0));
+  if (issues.length === 0) return null;
   const multi = issues.length > 1;
   // 다중이면 한 영역색으로 칠할 수 없으니 중립 카드, 단일이면 영역 틴트.
   const bg = multi ? 'border border-border bg-card shadow-soft' : AREA_BG_LIGHT[issues[0].area];
